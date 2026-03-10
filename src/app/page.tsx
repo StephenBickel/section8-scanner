@@ -1,6 +1,10 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
+import { Bookmark, Building2 } from "lucide-react";
+import CitySelector from "@/components/CitySelector";
+import { createClient } from "@/lib/supabase/client";
+import { useAuthStore } from "@/stores/auth";
 
 interface Deal {
   address: string;
@@ -65,6 +69,12 @@ export default function Home() {
   const [sortAsc, setSortAsc] = useState(false);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
 
+  // Save search state
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [saveName, setSaveName] = useState("");
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+
+  const { user } = useAuthStore();
   const abortRef = useRef<AbortController | null>(null);
 
   const startScan = useCallback(async () => {
@@ -152,6 +162,66 @@ export default function Home() {
     }
   }, [city, maxPrice, minScore, maxPages, scanning]);
 
+  const handleSaveSearch = async () => {
+    if (!saveName.trim()) return;
+    setSaveStatus("saving");
+
+    try {
+      const res = await fetch("/api/saved-searches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: saveName.trim(),
+          city,
+          max_price: maxPrice,
+          min_score: minScore,
+          max_pages: maxPages,
+        }),
+      });
+
+      if (res.ok) {
+        setSaveStatus("saved");
+        setTimeout(() => {
+          setShowSaveModal(false);
+          setSaveName("");
+          setSaveStatus("idle");
+        }, 1500);
+      } else {
+        setSaveStatus("error");
+      }
+    } catch {
+      setSaveStatus("error");
+    }
+  };
+
+  const handleAddToPortfolio = async (deal: Deal) => {
+    const supabase = createClient();
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    if (!currentUser) {
+      alert("Sign in to add properties to your portfolio");
+      return;
+    }
+
+    const { error: insertError } = await supabase.from("portfolio_properties").insert({
+      user_id: currentUser.id,
+      address: deal.address,
+      city,
+      zip_code: deal.zip_code || null,
+      purchase_price: deal.price,
+      beds: deal.beds,
+      baths: deal.baths,
+      sqft: deal.sqft,
+      current_rent: deal.monthly_rent,
+      hud_rent: deal.hud_rent,
+    });
+
+    if (insertError) {
+      alert(insertError.message);
+    } else {
+      alert("Added to portfolio!");
+    }
+  };
+
   const sortedDeals = [...deals].sort((a, b) => {
     const mul = sortAsc ? 1 : -1;
     return (a[sortKey] - b[sortKey]) * mul;
@@ -184,9 +254,9 @@ export default function Home() {
   );
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-full overflow-hidden">
       {/* Sidebar */}
-      <aside className="w-80 min-w-80 border-r border-[#222] bg-[#111] flex flex-col p-6 gap-6 overflow-y-auto">
+      <aside className="w-80 min-w-80 border-r border-[#222] bg-[#111] flex flex-col p-6 gap-6 overflow-y-auto hidden md:flex">
         {/* Title */}
         <div>
           <div className="flex items-center gap-3 mb-1">
@@ -200,21 +270,12 @@ export default function Home() {
           </p>
         </div>
 
-        {/* City input */}
+        {/* City selector */}
         <div>
           <label className="block text-xs text-[#777] uppercase tracking-wider mb-2">
             City
           </label>
-          <input
-            type="text"
-            value={city}
-            onChange={(e) => setCity(e.target.value)}
-            placeholder="cleveland-oh"
-            className="w-full px-3 py-2.5 bg-[#1a1a1a] border border-[#222] rounded-lg text-white text-sm font-[family-name:var(--font-mono)] focus:border-[#00ff88] focus:outline-none transition-colors"
-          />
-          <p className="text-[10px] text-[#555] mt-1">
-            Format: city-state (e.g. cleveland-oh)
-          </p>
+          <CitySelector value={city} onChange={setCity} />
         </div>
 
         {/* Max Price */}
@@ -287,6 +348,17 @@ export default function Home() {
           {scanning ? "Scanning..." : "Scan for Deals"}
         </button>
 
+        {/* Save Search Button */}
+        {scanDone && user && (
+          <button
+            onClick={() => setShowSaveModal(true)}
+            className="w-full py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider border border-[#222] text-[#777] hover:border-[#00ff88] hover:text-[#00ff88] transition-colors flex items-center justify-center gap-2"
+          >
+            <Bookmark size={12} />
+            Save This Search
+          </button>
+        )}
+
         {/* Progress */}
         {scanning && (
           <div className="scan-anim bg-[#1a1a1a] border border-[#222] rounded-lg p-3">
@@ -330,11 +402,31 @@ export default function Home() {
         )}
       </aside>
 
+      {/* Mobile controls */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-[#111] border-t border-[#222] p-4 z-40">
+        <div className="flex gap-2">
+          <div className="flex-1">
+            <CitySelector value={city} onChange={setCity} />
+          </div>
+          <button
+            onClick={startScan}
+            disabled={scanning}
+            className={`px-4 py-2.5 rounded-lg font-bold text-xs uppercase transition-all ${
+              scanning
+                ? "bg-[#1a1a1a] text-[#555]"
+                : "bg-[#00ff88] text-black"
+            }`}
+          >
+            {scanning ? "..." : "Scan"}
+          </button>
+        </div>
+      </div>
+
       {/* Main content */}
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
         {isDemo && (
           <div className="bg-yellow-900/30 border-b border-yellow-700/50 px-4 py-2 text-center text-sm text-yellow-300">
-            ⚡ Demo Mode — showing sample Cleveland data. Run locally on Mac mini for live Zillow scanning.
+            Demo Mode — showing sample Cleveland data. Run locally on Mac mini for live Zillow scanning.
           </div>
         )}
         {deals.length === 0 && !scanning ? (
@@ -347,11 +439,8 @@ export default function Home() {
               </h2>
               <div className="text-sm text-[#777] space-y-2">
                 <p>
-                  <span className="text-[#00ff88]">1.</span> Enter a city in
-                  the format{" "}
-                  <code className="font-[family-name:var(--font-mono)] text-[#555] bg-[#1a1a1a] px-1.5 py-0.5 rounded">
-                    cleveland-oh
-                  </code>
+                  <span className="text-[#00ff88]">1.</span> Select a city from
+                  the dropdown
                 </p>
                 <p>
                   <span className="text-[#00ff88]">2.</span> Adjust price,
@@ -375,8 +464,8 @@ export default function Home() {
             </div>
           </div>
         ) : (
-          /* Results table */
-          <div className="p-6">
+          /* Results */
+          <div className="p-4 md:p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm text-[#777] uppercase tracking-widest">
                 {scanDone
@@ -391,7 +480,8 @@ export default function Home() {
               )}
             </div>
 
-            <div className="border border-[#222] rounded-xl overflow-hidden bg-[#111]">
+            {/* Desktop table */}
+            <div className="hidden md:block border border-[#222] rounded-xl overflow-hidden bg-[#111]">
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse text-sm">
                   <thead>
@@ -425,15 +515,130 @@ export default function Home() {
                         onToggle={() =>
                           setExpandedRow(expandedRow === i ? null : i)
                         }
+                        onAddToPortfolio={() => handleAddToPortfolio(deal)}
+                        showPortfolioBtn={!!user}
                       />
                     ))}
                   </tbody>
                 </table>
               </div>
             </div>
+
+            {/* Mobile cards */}
+            <div className="md:hidden space-y-3">
+              {sortedDeals.map((deal, i) => (
+                <div
+                  key={deal.address + i}
+                  className="bg-[#111] border border-[#222] rounded-lg p-4"
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <p className="text-xs text-white font-medium">{deal.address}</p>
+                      <p className="text-[10px] text-[#555] font-[family-name:var(--font-mono)]">
+                        {formatCurrency(deal.price)} &middot; {deal.beds}bd/{deal.baths}ba
+                      </p>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-[family-name:var(--font-mono)] ${scoreBadgeColor(deal.score)}`}>
+                      {deal.score}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-[10px]">
+                    <div>
+                      <span className="text-[#555] block">DSCR</span>
+                      <span className={`font-bold font-[family-name:var(--font-mono)] ${dscrColor(deal.dscr)}`}>
+                        {deal.dscr.toFixed(2)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[#555] block">Cash Flow</span>
+                      <span className={`font-bold font-[family-name:var(--font-mono)] ${cashFlowColor(deal.monthly_cash_flow)}`}>
+                        {formatCurrency(deal.monthly_cash_flow)}/mo
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[#555] block">HUD FMR</span>
+                      <span className="font-bold font-[family-name:var(--font-mono)] text-[#00ff88]">
+                        {formatCurrency(deal.hud_rent)}/mo
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 mt-3">
+                    {deal.zillow_url && (
+                      <a
+                        href={deal.zillow_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[10px] text-[#00ff88] hover:underline"
+                      >
+                        Zillow &rarr;
+                      </a>
+                    )}
+                    {user && (
+                      <button
+                        onClick={() => handleAddToPortfolio(deal)}
+                        className="text-[10px] text-[#777] hover:text-[#00ff88] ml-auto"
+                      >
+                        + Portfolio
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </main>
+
+      {/* Save Search Modal */}
+      {showSaveModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#111] border border-[#222] rounded-lg w-full max-w-sm p-6">
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4">
+              Save Search
+            </h3>
+            <div className="mb-4">
+              <label className="block text-[10px] text-[#555] uppercase tracking-wider mb-1">
+                Name
+              </label>
+              <input
+                type="text"
+                value={saveName}
+                onChange={(e) => setSaveName(e.target.value)}
+                placeholder={`${city} under ${formatCurrency(maxPrice)}`}
+                className="w-full px-3 py-2 bg-[#1a1a1a] border border-[#222] rounded-lg text-white text-sm focus:border-[#00ff88] focus:outline-none"
+                autoFocus
+              />
+            </div>
+            <div className="text-xs text-[#555] font-[family-name:var(--font-mono)] mb-4 space-y-0.5">
+              <p>City: {city}</p>
+              <p>Max price: {formatCurrency(maxPrice)}</p>
+              <p>Min score: {minScore}</p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setShowSaveModal(false); setSaveName(""); setSaveStatus("idle"); }}
+                className="flex-1 py-2 rounded-lg text-xs text-[#777] border border-[#222] hover:border-[#555] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveSearch}
+                disabled={saveStatus === "saving" || saveStatus === "saved"}
+                className="flex-1 py-2 rounded-lg text-xs font-bold bg-[#00ff88] text-black hover:shadow-[0_0_20px_rgba(0,255,136,0.3)] disabled:opacity-50 transition-all"
+              >
+                {saveStatus === "saving"
+                  ? "Saving..."
+                  : saveStatus === "saved"
+                    ? "Saved!"
+                    : "Save"}
+              </button>
+            </div>
+            {saveStatus === "error" && (
+              <p className="text-xs text-[#ff4444] mt-2">Failed to save. Are you logged in?</p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -443,11 +648,15 @@ function DealRow({
   rank,
   expanded,
   onToggle,
+  onAddToPortfolio,
+  showPortfolioBtn,
 }: {
   deal: Deal;
   rank: number;
   expanded: boolean;
   onToggle: () => void;
+  onAddToPortfolio: () => void;
+  showPortfolioBtn: boolean;
 }) {
   return (
     <>
@@ -577,6 +786,22 @@ function DealRow({
                 )}
               </div>
             </div>
+
+            {/* Action buttons in expanded row */}
+            {showPortfolioBtn && (
+              <div className="mt-4 pt-3 border-t border-[#1a1a1a] flex gap-2">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAddToPortfolio();
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase text-[#777] border border-[#222] rounded-md hover:border-[#00ff88] hover:text-[#00ff88] transition-colors"
+                >
+                  <Building2 size={10} />
+                  Add to Portfolio
+                </button>
+              </div>
+            )}
           </td>
         </tr>
       )}
