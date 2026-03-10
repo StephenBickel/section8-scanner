@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
-import { Bookmark, Building2 } from "lucide-react";
+import { useState, useRef, useCallback, useEffect } from "react";
+import { Bookmark, Building2, Mail, Shield } from "lucide-react";
 import CitySelector from "@/components/CitySelector";
+import CrimeGradeBadge from "@/components/CrimeGradeBadge";
+import OutreachModal from "@/components/OutreachModal";
 import { createClient } from "@/lib/supabase/client";
 import { useAuthStore } from "@/stores/auth";
 
@@ -74,8 +76,28 @@ export default function Home() {
   const [saveName, setSaveName] = useState("");
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
-  const { user } = useAuthStore();
+  const [outreachDeal, setOutreachDeal] = useState<Deal | null>(null);
+  const [neighborhoodCache, setNeighborhoodCache] = useState<Record<string, { crime_grade: string; crime_score: number }>>({});
+
+  const { user, profile } = useAuthStore();
   const abortRef = useRef<AbortController | null>(null);
+
+  // Fetch neighborhood data for deal zip codes
+  const fetchNeighborhood = useCallback(async (zipCode: string) => {
+    if (!zipCode || neighborhoodCache[zipCode]) return;
+    try {
+      const res = await fetch(`/api/neighborhood/${zipCode}`);
+      if (res.ok) {
+        const data = await res.json();
+        setNeighborhoodCache((prev) => ({
+          ...prev,
+          [zipCode]: { crime_grade: data.crime_grade, crime_score: data.crime_score },
+        }));
+      }
+    } catch {
+      // ignore
+    }
+  }, [neighborhoodCache]);
 
   const startScan = useCallback(async () => {
     if (scanning) return;
@@ -497,7 +519,7 @@ export default function Home() {
                         Beds
                       </th>
                       <th className="px-4 py-3 text-left text-[11px] uppercase tracking-wider text-[#777] bg-[#1a1a1a]">
-                        HUD FMR
+                        HUD Payment Standard
                       </th>
                       <SortHeader label="DSCR" field="dscr" />
                       <SortHeader label="Cash Flow" field="monthly_cash_flow" />
@@ -516,7 +538,11 @@ export default function Home() {
                           setExpandedRow(expandedRow === i ? null : i)
                         }
                         onAddToPortfolio={() => handleAddToPortfolio(deal)}
+                        onContactSeller={() => setOutreachDeal(deal)}
                         showPortfolioBtn={!!user}
+                        isInvestor={profile?.plan === "investor"}
+                        crimeGrade={neighborhoodCache[deal.zip_code]?.crime_grade}
+                        onExpand={() => fetchNeighborhood(deal.zip_code)}
                       />
                     ))}
                   </tbody>
@@ -556,13 +582,16 @@ export default function Home() {
                       </span>
                     </div>
                     <div>
-                      <span className="text-[#555] block">HUD FMR</span>
+                      <span className="text-[#555] block">HUD Payment Std</span>
                       <span className="font-bold font-[family-name:var(--font-mono)] text-[#00ff88]">
                         {formatCurrency(deal.hud_rent)}/mo
                       </span>
                     </div>
                   </div>
-                  <div className="flex gap-2 mt-3">
+                  <div className="flex gap-2 mt-3 items-center">
+                    {neighborhoodCache[deal.zip_code] && (
+                      <CrimeGradeBadge grade={neighborhoodCache[deal.zip_code].crime_grade} />
+                    )}
                     {deal.zillow_url && (
                       <a
                         href={deal.zillow_url}
@@ -588,6 +617,14 @@ export default function Home() {
           </div>
         )}
       </main>
+
+      {/* Outreach Modal */}
+      {outreachDeal && (
+        <OutreachModal
+          deal={outreachDeal}
+          onClose={() => setOutreachDeal(null)}
+        />
+      )}
 
       {/* Save Search Modal */}
       {showSaveModal && (
@@ -649,15 +686,30 @@ function DealRow({
   expanded,
   onToggle,
   onAddToPortfolio,
+  onContactSeller,
   showPortfolioBtn,
+  isInvestor,
+  crimeGrade,
+  onExpand,
 }: {
   deal: Deal;
   rank: number;
   expanded: boolean;
   onToggle: () => void;
   onAddToPortfolio: () => void;
+  onContactSeller: () => void;
   showPortfolioBtn: boolean;
+  isInvestor?: boolean;
+  crimeGrade?: string;
+  onExpand?: () => void;
 }) {
+  useEffect(() => {
+    if (expanded && onExpand) onExpand();
+  }, [expanded, onExpand]);
+
+  // Estimate PM savings: 10% of rent * 12 months minus $15/mo self-manage tools * 12
+  const pmSavings = Math.round(deal.monthly_rent * 0.10 * 12 - 15 * 12);
+
   return (
     <>
       <tr
@@ -787,9 +839,32 @@ function DealRow({
               </div>
             </div>
 
+            {/* Neighborhood & Section 8 stats */}
+            <div className="mt-4 pt-3 border-t border-[#1a1a1a] flex flex-wrap gap-4 items-center text-xs">
+              {crimeGrade && (
+                <div className="flex items-center gap-2">
+                  <Shield size={12} className="text-[#555]" />
+                  <span className="text-[#555] uppercase tracking-wider">Crime Grade:</span>
+                  <CrimeGradeBadge grade={crimeGrade} />
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <span className="text-[#555]">Avg S8 tenant stay:</span>
+                <span className="font-[family-name:var(--font-mono)] text-white">7 years</span>
+              </div>
+              {pmSavings > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[#555]">Self-manage savings:</span>
+                  <span className="font-[family-name:var(--font-mono)] text-[#00ff88]">
+                    ~{formatCurrency(pmSavings)}/yr
+                  </span>
+                </div>
+              )}
+            </div>
+
             {/* Action buttons in expanded row */}
-            {showPortfolioBtn && (
-              <div className="mt-4 pt-3 border-t border-[#1a1a1a] flex gap-2">
+            <div className="mt-4 pt-3 border-t border-[#1a1a1a] flex flex-wrap gap-2">
+              {showPortfolioBtn && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -800,8 +875,35 @@ function DealRow({
                   <Building2 size={10} />
                   Add to Portfolio
                 </button>
-              </div>
-            )}
+              )}
+              {showPortfolioBtn && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onContactSeller();
+                  }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase border rounded-md transition-colors ${
+                    isInvestor
+                      ? "text-[#777] border-[#222] hover:border-[#00ff88] hover:text-[#00ff88]"
+                      : "text-[#555] border-[#222] hover:border-[#555]"
+                  }`}
+                >
+                  <Mail size={10} />
+                  {isInvestor ? "Contact Seller" : "Contact Seller (Upgrade)"}
+                </button>
+              )}
+              {deal.zillow_url && (
+                <a
+                  href={deal.zillow_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase text-[#777] border border-[#222] rounded-md hover:border-[#00ff88] hover:text-[#00ff88] transition-colors"
+                >
+                  View on Zillow
+                </a>
+              )}
+            </div>
           </td>
         </tr>
       )}

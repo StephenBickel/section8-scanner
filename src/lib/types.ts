@@ -139,6 +139,77 @@ export interface ScannerDeal {
   zip_code: string;
 }
 
+export interface SellerContact {
+  id: string;
+  deal_id: string | null;
+  address: string;
+  city: string;
+  zip_code: string | null;
+  owner_name: string | null;
+  owner_email: string | null;
+  owner_phone: string | null;
+  skip_trace_source: string | null;
+  skip_traced_at: string | null;
+  created_at: string;
+}
+
+export interface OutreachCampaign {
+  id: string;
+  user_id: string;
+  name: string;
+  template_subject: string;
+  template_body: string;
+  status: "draft" | "active" | "paused" | "completed";
+  auto_send: boolean;
+  min_deal_score: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OutreachEmail {
+  id: string;
+  campaign_id: string;
+  user_id: string;
+  seller_contact_id: string;
+  deal_id: string | null;
+  subject: string;
+  body: string;
+  status: "pending" | "sent" | "opened" | "replied" | "bounced" | "failed";
+  sequence_step: number;
+  scheduled_at: string | null;
+  sent_at: string | null;
+  opened_at: string | null;
+  replied_at: string | null;
+  created_at: string;
+}
+
+export interface NeighborhoodScore {
+  id: string;
+  zip_code: string;
+  city: string | null;
+  crime_score: number | null;
+  crime_grade: string | null;
+  school_score: number | null;
+  walkability_score: number | null;
+  data_source: string | null;
+  raw_data: Record<string, unknown>;
+  fetched_at: string;
+}
+
+export interface ManagementExpense {
+  id: string;
+  property_id: string;
+  user_id: string;
+  management_type: "self" | "property_manager" | "hybrid";
+  pm_fee_pct: number;
+  pm_monthly_cost: number;
+  self_manage_tools: Array<{ name: string; cost: number }>;
+  self_manage_monthly_cost: number;
+  monthly_savings: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export type PlanType = "free" | "pro" | "investor";
 
 export const PLAN_LIMITS = {

@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Plus, Building2, DollarSign, TrendingUp, X } from "lucide-react";
+import { Plus, Building2, DollarSign, TrendingUp, X, Settings, ChevronDown, ChevronUp } from "lucide-react";
 import AuthGuard from "@/components/AuthGuard";
+import SavingsCalculator from "@/components/SavingsCalculator";
 import { createClient } from "@/lib/supabase/client";
-import type { PortfolioProperty } from "@/lib/types";
+import type { PortfolioProperty, ManagementExpense } from "@/lib/types";
 import {
   ResponsiveContainer,
   BarChart,
@@ -222,6 +223,160 @@ function AddPropertyModal({
   );
 }
 
+type ManagementType = "self" | "property_manager" | "hybrid";
+
+const SELF_MANAGE_TOOLS = [
+  { name: "TenantCloud", cost: 15, description: "Rent collection + maintenance tracking" },
+  { name: "RentSpree", cost: 4, description: "Tenant screening ($50 one-time, ~$4/mo amortized)" },
+];
+
+function PropertyCard({ property: prop }: { property: PortfolioProperty }) {
+  const [showManagement, setShowManagement] = useState(false);
+  const [mgmtType, setMgmtType] = useState<ManagementType>("self");
+  const [pmFeePct, setPmFeePct] = useState(10);
+
+  const rent = prop.current_rent ?? 0;
+  const pmMonthlyCost = rent * (pmFeePct / 100);
+  const pmAnnualCost = pmMonthlyCost * 12;
+  const selfManageMonthlyCost = SELF_MANAGE_TOOLS.reduce((s, t) => s + t.cost, 0);
+  const selfManageAnnualCost = selfManageMonthlyCost * 12;
+  const annualSavings = pmAnnualCost - selfManageAnnualCost;
+
+  return (
+    <div className="bg-[#111] border border-[#222] rounded-lg p-4 hover:border-[#333] transition-colors">
+      <div className="flex items-start justify-between mb-2">
+        <div>
+          <h3 className="text-sm text-white font-medium">{prop.address}</h3>
+          <p className="text-xs text-[#555]">{prop.city}</p>
+        </div>
+        <span
+          className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${
+            prop.vacancy_status === "occupied"
+              ? "bg-[rgba(0,255,136,0.12)] text-[#00ff88]"
+              : prop.vacancy_status === "turning"
+                ? "bg-[rgba(255,204,0,0.12)] text-[#ffcc00]"
+                : "bg-[rgba(255,68,68,0.12)] text-[#ff4444]"
+          }`}
+        >
+          {prop.vacancy_status}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 mt-3">
+        <div>
+          <span className="text-[10px] text-[#555] block">Purchase</span>
+          <span className="text-xs font-bold text-white font-[family-name:var(--font-mono)]">
+            {formatCurrency(prop.purchase_price)}
+          </span>
+        </div>
+        <div>
+          <span className="text-[10px] text-[#555] block">Rent</span>
+          <span className="text-xs font-bold text-[#00ff88] font-[family-name:var(--font-mono)]">
+            {prop.current_rent ? `${formatCurrency(prop.current_rent)}/mo` : "—"}
+          </span>
+        </div>
+        <div>
+          <span className="text-[10px] text-[#555] block">
+            {prop.beds}bd / {prop.baths}ba
+          </span>
+          <span className="text-xs text-[#777] font-[family-name:var(--font-mono)]">
+            {prop.sqft > 0 ? `${prop.sqft.toLocaleString()} sqft` : "—"}
+          </span>
+        </div>
+      </div>
+
+      {/* Management toggle */}
+      <button
+        onClick={() => setShowManagement(!showManagement)}
+        className="mt-3 pt-3 border-t border-[#222] w-full flex items-center justify-between text-[10px] text-[#777] uppercase tracking-wider hover:text-[#00ff88] transition-colors"
+      >
+        <span className="flex items-center gap-1.5">
+          <Settings size={10} />
+          Management
+        </span>
+        {showManagement ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+      </button>
+
+      {showManagement && (
+        <div className="mt-3 space-y-3">
+          {/* Management type selector */}
+          <div className="flex gap-1">
+            {(["self", "property_manager", "hybrid"] as const).map((type) => (
+              <button
+                key={type}
+                onClick={() => setMgmtType(type)}
+                className={`text-[10px] px-2.5 py-1 rounded border transition-colors ${
+                  mgmtType === type
+                    ? "border-[#00ff88] text-[#00ff88] bg-[rgba(0,255,136,0.08)]"
+                    : "border-[#222] text-[#555] hover:border-[#555]"
+                }`}
+              >
+                {type === "self" ? "Self-Managed" : type === "property_manager" ? "PM" : "Hybrid"}
+              </button>
+            ))}
+          </div>
+
+          {mgmtType === "property_manager" || mgmtType === "hybrid" ? (
+            <div>
+              <label className="block text-[10px] text-[#555] uppercase tracking-wider mb-1">
+                PM Fee: {pmFeePct}%
+              </label>
+              <input
+                type="range"
+                min={5}
+                max={15}
+                step={1}
+                value={pmFeePct}
+                onChange={(e) => setPmFeePct(Number(e.target.value))}
+                className="w-full"
+              />
+              <div className="text-xs text-[#777] font-[family-name:var(--font-mono)] mt-1">
+                PM cost: {formatCurrency(pmMonthlyCost)}/mo ({formatCurrency(pmAnnualCost)}/yr)
+              </div>
+            </div>
+          ) : null}
+
+          {mgmtType === "self" || mgmtType === "hybrid" ? (
+            <div>
+              <span className="block text-[10px] text-[#555] uppercase tracking-wider mb-2">
+                Recommended Tools
+              </span>
+              <div className="space-y-1.5">
+                {SELF_MANAGE_TOOLS.map((tool) => (
+                  <div key={tool.name} className="flex items-center justify-between text-xs">
+                    <div>
+                      <span className="text-[#e0e0e0]">{tool.name}</span>
+                      <span className="text-[#555] ml-2">{tool.description}</span>
+                    </div>
+                    <span className="text-[#777] font-[family-name:var(--font-mono)]">
+                      ${tool.cost}/mo
+                    </span>
+                  </div>
+                ))}
+                <div className="text-[10px] text-[#555] mt-1">
+                  Find a local realtor for showings (~$50-100/showing)
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {/* Savings summary */}
+          {rent > 0 && (
+            <div className="bg-[#0d0d0d] rounded-lg p-3 flex items-center justify-between">
+              <span className="text-[10px] text-[#555] uppercase tracking-wider">
+                Annual Savings vs PM
+              </span>
+              <span className={`text-sm font-bold font-[family-name:var(--font-mono)] ${annualSavings > 0 ? "text-[#00ff88]" : "text-[#ff4444]"}`}>
+                {annualSavings > 0 ? "+" : ""}{formatCurrency(annualSavings)}/yr
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PortfolioContent() {
   const [properties, setProperties] = useState<PortfolioProperty[]>([]);
   const [loading, setLoading] = useState(true);
@@ -361,58 +516,15 @@ function PortfolioContent() {
       ) : (
         <div className="grid md:grid-cols-2 gap-4">
           {properties.map((prop) => (
-            <div
-              key={prop.id}
-              className="bg-[#111] border border-[#222] rounded-lg p-4 hover:border-[#333] transition-colors"
-            >
-              <div className="flex items-start justify-between mb-2">
-                <div>
-                  <h3 className="text-sm text-white font-medium">
-                    {prop.address}
-                  </h3>
-                  <p className="text-xs text-[#555]">{prop.city}</p>
-                </div>
-                <span
-                  className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${
-                    prop.vacancy_status === "occupied"
-                      ? "bg-[rgba(0,255,136,0.12)] text-[#00ff88]"
-                      : prop.vacancy_status === "turning"
-                        ? "bg-[rgba(255,204,0,0.12)] text-[#ffcc00]"
-                        : "bg-[rgba(255,68,68,0.12)] text-[#ff4444]"
-                  }`}
-                >
-                  {prop.vacancy_status}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2 mt-3">
-                <div>
-                  <span className="text-[10px] text-[#555] block">
-                    Purchase
-                  </span>
-                  <span className="text-xs font-bold text-white font-[family-name:var(--font-mono)]">
-                    {formatCurrency(prop.purchase_price)}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-[#555] block">Rent</span>
-                  <span className="text-xs font-bold text-[#00ff88] font-[family-name:var(--font-mono)]">
-                    {prop.current_rent
-                      ? `${formatCurrency(prop.current_rent)}/mo`
-                      : "—"}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-[#555] block">
-                    {prop.beds}bd / {prop.baths}ba
-                  </span>
-                  <span className="text-xs text-[#777] font-[family-name:var(--font-mono)]">
-                    {prop.sqft > 0 ? `${prop.sqft.toLocaleString()} sqft` : "—"}
-                  </span>
-                </div>
-              </div>
-            </div>
+            <PropertyCard key={prop.id} property={prop} />
           ))}
+        </div>
+      )}
+
+      {/* Portfolio-wide savings calculator */}
+      {properties.length > 0 && (
+        <div className="mt-8">
+          <SavingsCalculator />
         </div>
       )}
 

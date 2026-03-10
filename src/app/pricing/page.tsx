@@ -3,6 +3,7 @@
 import { Check, X } from "lucide-react";
 import { useAuthStore } from "@/stores/auth";
 import { PLAN_DETAILS } from "@/lib/stripe";
+import SavingsCalculator from "@/components/SavingsCalculator";
 import type { PlanType } from "@/lib/types";
 
 const tiers: { key: PlanType; popular?: boolean }[] = [
@@ -109,6 +110,19 @@ export default function PricingPage() {
             </div>
           );
         })}
+      </div>
+
+      {/* Savings Calculator */}
+      <div className="mt-12">
+        <div className="text-center mb-6">
+          <h2 className="text-lg font-bold text-white mb-1">
+            Self-Manage & Save Thousands
+          </h2>
+          <p className="text-sm text-[#777]">
+            See how much you save by self-managing with our recommended tools
+          </p>
+        </div>
+        <SavingsCalculator />
       </div>
 
       {/* Stripe setup note */}

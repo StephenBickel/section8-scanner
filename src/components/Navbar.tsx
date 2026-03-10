@@ -12,6 +12,8 @@ import {
   LogOut,
   Menu,
   X,
+  Mail,
+  Lock,
 } from "lucide-react";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -21,6 +23,7 @@ const NAV_LINKS = [
   { href: "/", label: "Scanner", icon: Search },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/portfolio", label: "Portfolio", icon: Building2 },
+  { href: "/outreach", label: "Outreach", icon: Mail, investorOnly: true },
   { href: "/pricing", label: "Pricing", icon: CreditCard },
 ];
 
@@ -100,8 +103,9 @@ export default function Navbar() {
 
       {/* Desktop nav links */}
       <div className="hidden md:flex items-center gap-1">
-        {NAV_LINKS.map(({ href, label, icon: Icon }) => {
+        {NAV_LINKS.map(({ href, label, icon: Icon, investorOnly }) => {
           const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
+          const showLock = investorOnly && profile?.plan !== "investor";
           return (
             <Link
               key={href}
@@ -114,6 +118,7 @@ export default function Navbar() {
             >
               <Icon size={14} />
               {label}
+              {showLock && <Lock size={10} className="text-[#555]" />}
             </Link>
           );
         })}
@@ -168,8 +173,9 @@ export default function Navbar() {
       {/* Mobile menu */}
       {mobileOpen && (
         <div className="absolute top-14 left-0 right-0 bg-[#111] border-b border-[#222] p-4 flex flex-col gap-2 md:hidden z-50">
-          {NAV_LINKS.map(({ href, label, icon: Icon }) => {
+          {NAV_LINKS.map(({ href, label, icon: Icon, investorOnly }) => {
             const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
+            const showLock = investorOnly && profile?.plan !== "investor";
             return (
               <Link
                 key={href}
@@ -183,6 +189,7 @@ export default function Navbar() {
               >
                 <Icon size={16} />
                 {label}
+                {showLock && <Lock size={10} className="text-[#555]" />}
               </Link>
             );
           })}

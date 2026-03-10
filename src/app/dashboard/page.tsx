@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Search, Clock, Bell, TrendingUp } from "lucide-react";
 import AuthGuard from "@/components/AuthGuard";
+import ResourceLinks from "@/components/ResourceLinks";
 import { createClient } from "@/lib/supabase/client";
 import type { SavedSearch, ScanRun } from "@/lib/types";
 
@@ -182,6 +183,10 @@ function DashboardContent() {
             </div>
           )}
         </div>
+      </div>
+      {/* Resources */}
+      <div className="mt-8">
+        <ResourceLinks />
       </div>
     </div>
   );
