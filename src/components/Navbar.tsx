@@ -13,6 +13,7 @@ import {
   Menu,
   X,
   Mail,
+  FileText,
   Lock,
 } from "lucide-react";
 import { useState } from "react";
@@ -24,6 +25,7 @@ const NAV_LINKS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/portfolio", label: "Portfolio", icon: Building2 },
   { href: "/outreach", label: "Outreach", icon: Mail, investorOnly: true },
+  { href: "/reports", label: "Reports", icon: FileText, proOnly: true },
   { href: "/pricing", label: "Pricing", icon: CreditCard },
 ];
 
@@ -103,9 +105,10 @@ export default function Navbar() {
 
       {/* Desktop nav links */}
       <div className="hidden md:flex items-center gap-1">
-        {NAV_LINKS.map(({ href, label, icon: Icon, investorOnly }) => {
+        {NAV_LINKS.map(({ href, label, icon: Icon, investorOnly, proOnly }) => {
           const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
-          const showLock = investorOnly && profile?.plan !== "investor";
+          const showLock = (investorOnly && profile?.plan !== "investor") ||
+            (proOnly && profile?.plan === "free");
           return (
             <Link
               key={href}
@@ -173,9 +176,10 @@ export default function Navbar() {
       {/* Mobile menu */}
       {mobileOpen && (
         <div className="absolute top-14 left-0 right-0 bg-[#111] border-b border-[#222] p-4 flex flex-col gap-2 md:hidden z-50">
-          {NAV_LINKS.map(({ href, label, icon: Icon, investorOnly }) => {
+          {NAV_LINKS.map(({ href, label, icon: Icon, investorOnly, proOnly }) => {
             const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
-            const showLock = investorOnly && profile?.plan !== "investor";
+            const showLock = (investorOnly && profile?.plan !== "investor") ||
+              (proOnly && profile?.plan === "free");
             return (
               <Link
                 key={href}

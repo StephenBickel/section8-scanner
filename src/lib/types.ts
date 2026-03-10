@@ -210,6 +210,72 @@ export interface ManagementExpense {
   updated_at: string;
 }
 
+export interface AlertPreferences {
+  id: string;
+  user_id: string;
+  email_enabled: boolean;
+  email_address: string | null;
+  digest_frequency: "instant" | "daily" | "weekly";
+  min_deal_score: number;
+  price_drop_threshold: number;
+  notify_new_deals: boolean;
+  notify_price_drops: boolean;
+  notify_score_changes: boolean;
+  quiet_hours_start: number | null;
+  quiet_hours_end: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DealReport {
+  id: string;
+  user_id: string;
+  deal_id: string | null;
+  saved_search_id: string | null;
+  report_type: "single_deal" | "market_summary" | "portfolio_summary";
+  title: string;
+  data: Record<string, unknown>;
+  pdf_url: string | null;
+  created_at: string;
+}
+
+export interface CountyTaxRate {
+  id: string;
+  state: string;
+  county: string;
+  fips_code: string | null;
+  effective_tax_rate: number;
+  median_home_value: number | null;
+  median_tax_paid: number | null;
+  year: number;
+  source: string | null;
+  created_at: string;
+}
+
+export interface InsuranceEstimate {
+  id: string;
+  state: string;
+  county: string | null;
+  avg_annual_premium: number;
+  avg_monthly_premium: number;
+  coverage_amount: number | null;
+  year: number;
+  source: string | null;
+  created_at: string;
+}
+
+export interface FMRHistoryEntry {
+  id: string;
+  zip_code: string;
+  year: number;
+  efficiency: number;
+  one_bed: number;
+  two_bed: number;
+  three_bed: number;
+  four_bed: number;
+  created_at: string;
+}
+
 export type PlanType = "free" | "pro" | "investor";
 
 export const PLAN_LIMITS = {

@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Search, Clock, Bell, TrendingUp } from "lucide-react";
+import { Search, Clock, Bell, TrendingUp, FileText, AlertTriangle } from "lucide-react";
 import AuthGuard from "@/components/AuthGuard";
 import ResourceLinks from "@/components/ResourceLinks";
+import FMRTrendChart from "@/components/FMRTrendChart";
 import { createClient } from "@/lib/supabase/client";
-import type { SavedSearch, ScanRun } from "@/lib/types";
+import type { SavedSearch, ScanRun, Alert } from "@/lib/types";
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("en-US", {
@@ -20,13 +21,15 @@ function formatDate(dateStr: string): string {
 function DashboardContent() {
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
   const [recentScans, setRecentScans] = useState<ScanRun[]>([]);
+  const [recentAlerts, setRecentAlerts] = useState<Alert[]>([]);
+  const [topZip, setTopZip] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const supabase = createClient();
 
     async function load() {
-      const [searchesRes, scansRes] = await Promise.all([
+      const [searchesRes, scansRes, alertsRes] = await Promise.all([
         supabase
           .from("saved_searches")
           .select("*")
@@ -37,10 +40,32 @@ function DashboardContent() {
           .select("*")
           .order("started_at", { ascending: false })
           .limit(10),
+        supabase
+          .from("alerts")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(10),
       ]);
 
       if (searchesRes.data) setSavedSearches(searchesRes.data);
-      if (scansRes.data) setRecentScans(scansRes.data);
+      if (scansRes.data) {
+        setRecentScans(scansRes.data);
+        // Find most-scanned zip for FMR chart
+        const cities = scansRes.data.map((s) => s.city);
+        if (cities.length > 0) {
+          const cityZipMap: Record<string, string> = {
+            "cleveland-oh": "44101",
+            "memphis-tn": "38101",
+            "houston-tx": "48201",
+            "indianapolis-in": "46201",
+            "birmingham-al": "35201",
+          };
+          const topCity = cities[0];
+          const zip = cityZipMap[topCity];
+          if (zip) setTopZip(zip);
+        }
+      }
+      if (alertsRes.data) setRecentAlerts(alertsRes.data as Alert[]);
       setLoading(false);
     }
 
@@ -82,6 +107,78 @@ function DashboardContent() {
           </div>
         ))}
       </div>
+
+      {/* Alert Activity + Reports Quick Links */}
+      <div className="grid md:grid-cols-2 gap-4 mb-8">
+        {/* Alert Activity */}
+        <div className="bg-[#111] border border-[#222] rounded-lg p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <AlertTriangle size={14} className="text-[#ffcc00]" />
+            <span className="text-[10px] text-[#777] uppercase tracking-wider">
+              Recent Alerts
+            </span>
+          </div>
+          {recentAlerts.length === 0 ? (
+            <p className="text-xs text-[#555]">No alerts yet. Set up alerts in Settings.</p>
+          ) : (
+            <div className="space-y-2">
+              {recentAlerts.slice(0, 5).map((alert) => {
+                const meta = alert.metadata as Record<string, unknown>;
+                return (
+                  <div key={alert.id} className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-1.5 h-1.5 rounded-full ${
+                        alert.alert_type === "new_deal" ? "bg-[#00ff88]" :
+                        alert.alert_type === "price_drop" ? "bg-[#ffcc00]" : "bg-[#777]"
+                      }`} />
+                      <span className="text-[#e0e0e0] truncate max-w-[200px]">
+                        {String(meta.address ?? "Unknown")}
+                      </span>
+                    </div>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                      alert.alert_type === "new_deal"
+                        ? "bg-[rgba(0,255,136,0.12)] text-[#00ff88]"
+                        : "bg-[rgba(255,204,0,0.12)] text-[#ffcc00]"
+                    }`}>
+                      {alert.alert_type === "new_deal" ? "new" : "price drop"}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Reports Quick Link */}
+        <Link
+          href="/reports"
+          className="bg-[#111] border border-[#222] rounded-lg p-4 hover:border-[#333] transition-colors block"
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <FileText size={14} className="text-[#00ff88]" />
+            <span className="text-[10px] text-[#777] uppercase tracking-wider">
+              Reports
+            </span>
+          </div>
+          <p className="text-sm text-white font-medium mb-1">Generate Reports</p>
+          <p className="text-xs text-[#555]">
+            Deal analysis, market summaries, and portfolio reports with PDF export.
+          </p>
+          <span className="text-xs text-[#00ff88] mt-2 inline-block">
+            View Reports &rarr;
+          </span>
+        </Link>
+      </div>
+
+      {/* FMR Trend Mini Chart */}
+      {topZip && (
+        <div className="bg-[#111] border border-[#222] rounded-lg p-4 mb-8">
+          <div className="text-[10px] text-[#777] uppercase tracking-wider mb-2">
+            FMR Trends — Most Scanned Market
+          </div>
+          <FMRTrendChart zipCode={topZip} compact />
+        </div>
+      )}
 
       <div className="grid md:grid-cols-2 gap-6">
         {/* Saved Searches */}
