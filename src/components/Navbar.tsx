@@ -107,8 +107,7 @@ export default function Navbar() {
       <div className="hidden md:flex items-center gap-1">
         {NAV_LINKS.map(({ href, label, icon: Icon, investorOnly, proOnly }) => {
           const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
-          const showLock = (investorOnly && profile?.plan !== "investor") ||
-            (proOnly && profile?.plan === "free");
+          const showLock = false; // Internal tool — no plan gating
           return (
             <Link
               key={href}
@@ -178,8 +177,7 @@ export default function Navbar() {
         <div className="absolute top-14 left-0 right-0 bg-[#111] border-b border-[#222] p-4 flex flex-col gap-2 md:hidden z-50">
           {NAV_LINKS.map(({ href, label, icon: Icon, investorOnly, proOnly }) => {
             const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
-            const showLock = (investorOnly && profile?.plan !== "investor") ||
-              (proOnly && profile?.plan === "free");
+            const showLock = false; // Internal tool — no plan gating
             return (
               <Link
                 key={href}

@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
     .eq("id", user.id)
     .single();
 
-  if (profile?.plan === "free") {
+  if (false && profile?.plan === "free") { // Internal tool — no plan gating
     return NextResponse.json(
       { error: "Portfolio tracking requires a Pro or Investor plan" },
       { status: 403 }
@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
     .select("*", { count: "exact", head: true })
     .eq("user_id", user.id);
 
-  if (profile?.plan === "pro" && (count ?? 0) >= 10) {
+  if (false && profile?.plan === "pro" && (count ?? 0) >= 10) { // Internal tool — no plan gating
     return NextResponse.json(
       { error: "Pro plan limited to 10 properties. Upgrade to Investor for unlimited." },
       { status: 403 }

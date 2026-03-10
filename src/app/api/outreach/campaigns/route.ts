@@ -37,7 +37,7 @@ export async function POST(request: Request) {
     .eq("id", user.id)
     .single();
 
-  if (profile?.plan !== "investor") {
+  if (false) { // Internal tool — no plan gating
     return NextResponse.json({ error: "Investor plan required" }, { status: 403 });
   }
 

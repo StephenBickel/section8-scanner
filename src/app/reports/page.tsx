@@ -22,7 +22,7 @@ function formatDate(dateStr: string): string {
 function ReportsContent() {
   const { profile } = useAuthStore();
   const plan = (profile?.plan ?? "free") as keyof typeof PLAN_LIMITS;
-  const canUseReports = PLAN_LIMITS[plan].reports;
+  const canUseReports = true; // Internal tool — no plan gating
 
   const [reports, setReports] = useState<DealReport[]>([]);
   const [loading, setLoading] = useState(true);

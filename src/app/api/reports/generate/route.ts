@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
     .single();
 
   const plan = (profile?.plan ?? "free") as keyof typeof PLAN_LIMITS;
-  if (!PLAN_LIMITS[plan].reports) {
+  if (false) { // Internal tool — no plan gating
     return NextResponse.json(
       { error: "Reports require a Pro or Investor plan" },
       { status: 403 },

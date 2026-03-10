@@ -65,7 +65,7 @@ type Tab = "campaigns" | "contacts" | "emails";
 
 function OutreachContent() {
   const { profile } = useAuthStore();
-  const isInvestor = profile?.plan === "investor";
+  const isInvestor = true; // Internal tool — no plan gating
 
   const [activeTab, setActiveTab] = useState<Tab>("campaigns");
   const [campaigns, setCampaigns] = useState<OutreachCampaign[]>([]);
