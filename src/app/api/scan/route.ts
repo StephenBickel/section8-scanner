@@ -5,6 +5,7 @@ import { join } from "path";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 300; // 5 min max (Pro plan), 60s on hobby
 
 // Demo data shown when Mac mini tunnel is offline
 const DEMO_DEALS = [
@@ -56,25 +57,28 @@ export async function GET(req: NextRequest) {
   const macMiniUrl = process.env.MAC_MINI_API_URL;
 
   if (macMiniUrl) {
-    // Proxy to Mac mini FastAPI server
+    // Proxy to Mac mini FastAPI server — stream the SSE response
     const upstreamUrl = `${macMiniUrl}/api/scan?${searchParams.toString()}`;
     try {
       const upstream = await fetch(upstreamUrl, {
-        headers: { Accept: "text/event-stream" },
-        // @ts-expect-error Node fetch supports this
-        duplex: "half",
+        headers: { Accept: "text/event-stream", "Cache-Control": "no-cache" },
+        signal: AbortSignal.timeout(290000), // 290s timeout
       });
       if (upstream.ok && upstream.body) {
-        return new Response(upstream.body, {
+        // Pipe upstream SSE stream directly to client
+        const { readable, writable } = new TransformStream();
+        upstream.body.pipeTo(writable).catch(() => {});
+        return new Response(readable, {
           headers: {
             "Content-Type": "text/event-stream",
             "Cache-Control": "no-cache",
-            Connection: "keep-alive",
+            "X-Accel-Buffering": "no",
           },
         });
       }
-    } catch {
-      // Fall through to demo if tunnel is unreachable
+    } catch (err) {
+      console.error("Tunnel proxy error:", err);
+      // Fall through to local or demo
     }
   }
 
