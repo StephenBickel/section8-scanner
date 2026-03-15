@@ -515,7 +515,7 @@ export default function Home() {
                         onAddToPortfolio={() => handleAddToPortfolio(deal)}
                         onContactSeller={() => setOutreachDeal(deal)}
                         showPortfolioBtn={!!user}
-                        isInvestor={profile?.plan === "investor"}
+                        isInvestor={true}
                         crimeGrade={neighborhoodCache[deal.zip_code]?.crime_grade}
                         onExpand={() => fetchNeighborhood(deal.zip_code)}
                       />

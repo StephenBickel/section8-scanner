@@ -7,7 +7,6 @@ import {
   Search,
   LayoutDashboard,
   Building2,
-  CreditCard,
   Settings,
   LogOut,
   Menu,
@@ -27,9 +26,8 @@ const NAV_LINKS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/portfolio", label: "Portfolio", icon: Building2 },
   { href: "/tenants", label: "Tenants", icon: Users },
-  { href: "/outreach", label: "Outreach", icon: Mail, investorOnly: true },
-  { href: "/reports", label: "Reports", icon: FileText, proOnly: true },
-  { href: "/pricing", label: "Pricing", icon: CreditCard },
+  { href: "/outreach", label: "Outreach", icon: Mail },
+  { href: "/reports", label: "Reports", icon: FileText },
 ];
 
 export default function Navbar() {
@@ -87,12 +85,7 @@ export default function Navbar() {
     router.push("/");
   };
 
-  const planBadgeColor =
-    profile?.plan === "investor"
-      ? "bg-[rgba(170,255,68,0.12)] text-[#aaff44]"
-      : profile?.plan === "pro"
-        ? "bg-[rgba(0,255,136,0.12)] text-[#00ff88]"
-        : "bg-[rgba(119,119,119,0.12)] text-[#777]";
+  // Internal tool — no plan badges or gating
 
   return (
     <nav className="h-14 border-b border-[#222] bg-[#111] flex items-center px-4 md:px-6 gap-4 shrink-0 z-50">
@@ -109,7 +102,7 @@ export default function Navbar() {
 
       {/* Desktop nav links */}
       <div className="hidden md:flex items-center gap-1">
-        {NAV_LINKS.map(({ href, label, icon: Icon, investorOnly, proOnly }) => {
+        {NAV_LINKS.map(({ href, label, icon: Icon }) => {
           const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
           const showLock = false; // Internal tool — no plan gating
           return (
@@ -141,9 +134,6 @@ export default function Navbar() {
       {/* Auth section */}
       {user ? (
         <div className="hidden md:flex items-center gap-3">
-          <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${planBadgeColor}`}>
-            {profile?.plan ?? "free"}
-          </span>
           <Link
             href="/settings"
             className="text-xs text-[#777] hover:text-white transition-colors"
@@ -185,7 +175,7 @@ export default function Navbar() {
       {/* Mobile menu */}
       {mobileOpen && (
         <div className="absolute top-14 left-0 right-0 bg-[#111] border-b border-[#222] p-4 flex flex-col gap-2 md:hidden z-50">
-          {NAV_LINKS.map(({ href, label, icon: Icon, investorOnly, proOnly }) => {
+          {NAV_LINKS.map(({ href, label, icon: Icon }) => {
             const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
             const showLock = false; // Internal tool — no plan gating
             return (
@@ -209,9 +199,6 @@ export default function Navbar() {
             {user ? (
               <>
                 <div className="flex items-center gap-2 px-3 py-1 mb-2">
-                  <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${planBadgeColor}`}>
-                    {profile?.plan ?? "free"}
-                  </span>
                   <span className="text-xs text-[#777] truncate">{user.email}</span>
                 </div>
                 <Link
