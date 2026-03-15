@@ -20,6 +20,7 @@ import {
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuthStore } from "@/stores/auth";
+import { useScanStore } from "@/stores/scan";
 
 const NAV_LINKS = [
   { href: "/", label: "Scanner", icon: Search },
@@ -35,6 +36,7 @@ export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, profile, setUser, setProfile, setLoading } = useAuthStore();
+  const { scanning, deals, progress } = useScanStore();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
@@ -123,6 +125,12 @@ export default function Navbar() {
               <Icon size={14} />
               {label}
               {showLock && <Lock size={10} className="text-[#555]" />}
+              {href === "/" && scanning && (
+                <span className="flex items-center gap-1 ml-1 text-[10px] text-[#00ff88] font-[family-name:var(--font-mono)]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#00ff88] animate-pulse" />
+                  {deals.length}
+                </span>
+              )}
             </Link>
           );
         })}

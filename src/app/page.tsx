@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Bookmark, Building2, Mail, Shield } from "lucide-react";
 import CitySelector from "@/components/CitySelector";
 import CrimeGradeBadge from "@/components/CrimeGradeBadge";
 import OutreachModal from "@/components/OutreachModal";
 import { createClient } from "@/lib/supabase/client";
 import { useAuthStore } from "@/stores/auth";
+import { useScanStore } from "@/stores/scan";
 
 interface Deal {
   address: string;
@@ -53,19 +54,13 @@ function cashFlowColor(cf: number): string {
 }
 
 export default function Home() {
-  const [city, setCity] = useState("cleveland-oh");
-  const [maxPrice, setMaxPrice] = useState(100000);
-  const [minScore, setMinScore] = useState(40);
-  const [maxPages, setMaxPages] = useState(3);
-
-  const [scanning, setScanning] = useState(false);
-  const [deals, setDeals] = useState<Deal[]>([]);
-  const [progress, setProgress] = useState({ page: 0, totalPages: 0, count: 0 });
-  const [scanDone, setScanDone] = useState(false);
-  const [scanStats, setScanStats] = useState<{ total: number; deals: number } | null>(null);
-  const [isDemo, setIsDemo] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [logs, setLogs] = useState<string[]>([]);
+  // Global scan state — persists across page navigations
+  const {
+    city, maxPrice, minScore, maxPages,
+    setCity, setMaxPrice, setMinScore, setMaxPages,
+    scanning, deals, progress, scanDone, scanStats, isDemo, error, logs,
+    startScan: startScanFromStore,
+  } = useScanStore();
 
   const [sortKey, setSortKey] = useState<SortKey>("score");
   const [sortAsc, setSortAsc] = useState(false);
@@ -80,7 +75,6 @@ export default function Home() {
   const [neighborhoodCache, setNeighborhoodCache] = useState<Record<string, { crime_grade: string; crime_score: number }>>({});
 
   const { user, profile } = useAuthStore();
-  const abortRef = useRef<AbortController | null>(null);
 
   // Fetch neighborhood data for deal zip codes
   const fetchNeighborhood = useCallback(async (zipCode: string) => {
@@ -99,90 +93,10 @@ export default function Home() {
     }
   }, [neighborhoodCache]);
 
-  const startScan = useCallback(async () => {
-    if (scanning) return;
-
-    setScanning(true);
-    setDeals([]);
-    setScanDone(false);
-    setScanStats(null);
-    setError(null);
-    setLogs([]);
-    setProgress({ page: 0, totalPages: maxPages, count: 0 });
+  const startScan = () => {
     setExpandedRow(null);
-
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    try {
-      const params = new URLSearchParams({
-        city,
-        maxPrice: maxPrice.toString(),
-        minScore: minScore.toString(),
-        maxPages: maxPages.toString(),
-      });
-
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || "";
-      const res = await fetch(`${apiBase}/api/scan?${params}`, {
-        signal: controller.signal,
-      });
-
-      if (!res.ok || !res.body) {
-        setError("Failed to connect to scanner");
-        setScanning(false);
-        return;
-      }
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const jsonStr = line.slice(6).trim();
-          if (!jsonStr) continue;
-
-          try {
-            const msg = JSON.parse(jsonStr);
-
-            if (msg.type === "property") {
-              setDeals((prev) => [...prev, msg.data as Deal]);
-            } else if (msg.type === "progress") {
-              setProgress({
-                page: msg.page,
-                totalPages: msg.total_pages,
-                count: msg.count,
-              });
-            } else if (msg.type === "done") {
-              setScanStats({ total: msg.total, deals: msg.deals });
-              setScanDone(true);
-              if (msg.demo) setIsDemo(true);
-            } else if (msg.type === "error") {
-              setError(msg.message);
-            } else if (msg.type === "log") {
-              setLogs((prev) => [...prev, msg.message]);
-            }
-          } catch {
-            // skip malformed JSON
-          }
-        }
-      }
-    } catch (e: unknown) {
-      if (e instanceof Error && e.name !== "AbortError") {
-        setError(e.message);
-      }
-    } finally {
-      setScanning(false);
-    }
-  }, [city, maxPrice, minScore, maxPages, scanning]);
+    startScanFromStore();
+  };
 
   const handleSaveSearch = async () => {
     if (!saveName.trim()) return;
