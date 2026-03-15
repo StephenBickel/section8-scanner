@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Bookmark, Building2, Mail, Shield } from "lucide-react";
+import { Bookmark, Building2, Mail, Shield, Gift, ExternalLink } from "lucide-react";
 import CitySelector from "@/components/CitySelector";
 import CrimeGradeBadge from "@/components/CrimeGradeBadge";
 import OutreachModal from "@/components/OutreachModal";
 import { createClient } from "@/lib/supabase/client";
 import { useAuthStore } from "@/stores/auth";
 import { useScanStore } from "@/stores/scan";
+import { getGrantsForCity, TYPE_LABELS, TYPE_COLORS, type GrantProgram } from "@/lib/grants";
 
 interface Deal {
   address: string;
@@ -518,6 +519,7 @@ export default function Home() {
                         isInvestor={true}
                         crimeGrade={neighborhoodCache[deal.zip_code]?.crime_grade}
                         onExpand={() => fetchNeighborhood(deal.zip_code)}
+                        citySlug={city}
                       />
                     ))}
                   </tbody>
@@ -655,6 +657,87 @@ export default function Home() {
   );
 }
 
+// --- Grants Section ---
+function GrantsSection({ citySlug }: { citySlug: string }) {
+  const [showGrants, setShowGrants] = useState(false);
+  const { local, federal } = getGrantsForCity(citySlug);
+  const totalPrograms = local.length + federal.length;
+
+  function GrantCard({ grant }: { grant: GrantProgram }) {
+    return (
+      <div className="p-3 rounded border border-[#222] bg-[#111] hover:border-[#333] transition-colors">
+        <div className="flex items-start justify-between gap-2 mb-1">
+          <span className="text-xs font-bold text-white">{grant.name}</span>
+          <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded whitespace-nowrap ${TYPE_COLORS[grant.type]}`}>
+            {TYPE_LABELS[grant.type]}
+          </span>
+        </div>
+        <div className="text-xs font-[family-name:var(--font-mono)] text-[#00ff88] font-bold mb-1">
+          {grant.amount}
+        </div>
+        <div className="text-[11px] text-[#777] mb-2">{grant.requirements}</div>
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] text-[#555]">{grant.source}</span>
+          <a
+            href={grant.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="flex items-center gap-1 text-[10px] text-[#00ff88] hover:underline"
+          >
+            Apply <ExternalLink size={8} />
+          </a>
+        </div>
+        {grant.phone && (
+          <div className="mt-1 text-[10px] text-[#555]">📞 {grant.phone}</div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 pt-3 border-t border-[#1a1a1a]">
+      <button
+        onClick={(e) => { e.stopPropagation(); setShowGrants(!showGrants); }}
+        className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#777] hover:text-white transition-colors"
+      >
+        <span className={`transition-transform ${showGrants ? "rotate-90" : ""}`}>▶</span>
+        <Gift size={12} />
+        Rehab Grants & Assistance
+        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-[rgba(0,255,136,0.08)] border border-[rgba(0,255,136,0.2)] text-[#00ff88]">
+          {totalPrograms} programs
+        </span>
+      </button>
+
+      {showGrants && (
+        <div className="mt-3 space-y-4" onClick={(e) => e.stopPropagation()}>
+          {local.length > 0 && (
+            <div>
+              <h4 className="text-[10px] font-bold uppercase tracking-wider text-[#555] mb-2">
+                Local Programs
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {local.map((g) => <GrantCard key={g.name} grant={g} />)}
+              </div>
+            </div>
+          )}
+          <div>
+            <h4 className="text-[10px] font-bold uppercase tracking-wider text-[#555] mb-2">
+              Federal Programs (Available Everywhere)
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {federal.map((g) => <GrantCard key={g.name} grant={g} />)}
+            </div>
+          </div>
+          <p className="text-[10px] text-[#555] italic">
+            Note: Grant availability and amounts change. Contact the administering agency to confirm current funding. Most programs require an application and have affordability compliance periods.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // --- Rehab & All-In Cost Estimator ---
 const CLOSING_COST_PCT = 0.03;
 const HQS_BUFFER = 3000;
@@ -738,6 +821,7 @@ function DealRow({
   isInvestor,
   crimeGrade,
   onExpand,
+  citySlug,
 }: {
   deal: Deal;
   rank: number;
@@ -749,6 +833,7 @@ function DealRow({
   isInvestor?: boolean;
   crimeGrade?: string;
   onExpand?: () => void;
+  citySlug: string;
 }) {
   const rehab = estimateRehab(deal.price, deal.sqft);
   const [rehabCost, setRehabCost] = useState(rehab.amount);
@@ -1022,6 +1107,9 @@ function DealRow({
                 </div>
               )}
             </div>
+
+            {/* Rehab Grants & Assistance */}
+            <GrantsSection citySlug={citySlug} />
 
             {/* Neighborhood & Section 8 stats */}
             <div className="mt-4 pt-3 border-t border-[#1a1a1a] flex flex-wrap gap-4 items-center text-xs">
