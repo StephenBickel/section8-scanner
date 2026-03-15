@@ -7,11 +7,13 @@ import { ChevronDown } from "lucide-react";
 interface CitySelectorProps {
   value: string;
   onChange: (value: string) => void;
+  openDirection?: "up" | "down" | "auto";
 }
 
-export default function CitySelector({ value, onChange }: CitySelectorProps) {
+export default function CitySelector({ value, onChange, openDirection = "auto" }: CitySelectorProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [dropUp, setDropUp] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -28,6 +30,20 @@ export default function CitySelector({ value, onChange }: CitySelectorProps) {
 
   // Check if user typed a custom city value (city-state format)
   const isCustomFormat = /^[a-z0-9]+-[a-z]{2}$/i.test(search.trim());
+
+  // Determine if dropdown should open upward
+  useEffect(() => {
+    if (open && containerRef.current && openDirection === "auto") {
+      const rect = containerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      setDropUp(spaceBelow < 280 && spaceAbove > spaceBelow);
+    } else if (openDirection === "up") {
+      setDropUp(true);
+    } else if (openDirection === "down") {
+      setDropUp(false);
+    }
+  }, [open, openDirection]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -74,7 +90,9 @@ export default function CitySelector({ value, onChange }: CitySelectorProps) {
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-[#1a1a1a] border border-[#222] rounded-lg shadow-xl z-50 max-h-64 overflow-hidden flex flex-col">
+        <div className={`absolute left-0 right-0 bg-[#1a1a1a] border border-[#222] rounded-lg shadow-xl z-50 max-h-64 overflow-hidden flex flex-col ${
+          dropUp ? "bottom-full mb-1" : "top-full mt-1"
+        }`}>
           <div className="p-2 border-b border-[#222]">
             <input
               ref={inputRef}

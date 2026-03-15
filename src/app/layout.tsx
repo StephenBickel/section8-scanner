@@ -30,9 +30,9 @@ export default function RootLayout({
       <body
         className={`${spaceGrotesk.variable} ${jetbrainsMono.variable} antialiased bg-[#0a0a0a] text-[#e0e0e0] font-[family-name:var(--font-space)]`}
       >
-        <div className="flex flex-col h-screen">
+        <div className="flex flex-col h-screen md:h-screen">
           <Navbar />
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 overflow-hidden md:overflow-hidden overflow-y-auto">
             {children}
           </div>
         </div>

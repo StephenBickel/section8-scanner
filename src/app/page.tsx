@@ -276,7 +276,7 @@ export default function Home() {
   );
 
   return (
-    <div className="flex h-full overflow-hidden">
+    <div className="flex flex-col md:flex-row h-full md:overflow-hidden overflow-y-auto">
       {/* Sidebar */}
       <aside className="w-80 min-w-80 border-r border-[#222] bg-[#111] flex flex-col p-6 gap-6 overflow-y-auto hidden md:flex">
         {/* Title */}
@@ -425,27 +425,88 @@ export default function Home() {
       </aside>
 
       {/* Mobile controls */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-[#111] border-t border-[#222] p-4 z-40">
-        <div className="flex gap-2">
-          <div className="flex-1">
-            <CitySelector value={city} onChange={setCity} />
-          </div>
-          <button
-            onClick={startScan}
-            disabled={scanning}
-            className={`px-4 py-2.5 rounded-lg font-bold text-xs uppercase transition-all ${
-              scanning
-                ? "bg-[#1a1a1a] text-[#555]"
-                : "bg-[#00ff88] text-black"
-            }`}
-          >
-            {scanning ? "..." : "Scan"}
-          </button>
+      <div className="md:hidden bg-[#111] border-b border-[#222] p-4 space-y-3">
+        <div className="flex items-center gap-3 mb-1">
+          <h1 className="text-lg font-bold text-white tracking-tight">
+            Section 8 Scanner
+          </h1>
+          <span className="pulse-dot w-2 h-2 rounded-full bg-[#00ff88] inline-block" />
         </div>
+        <div>
+          <label className="block text-xs text-[#777] uppercase tracking-wider mb-1">City</label>
+          <CitySelector value={city} onChange={setCity} openDirection="down" />
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <label className="block text-[10px] text-[#777] uppercase tracking-wider mb-1">
+              Max Price
+            </label>
+            <input
+              type="range"
+              min={20000}
+              max={200000}
+              step={5000}
+              value={maxPrice}
+              onChange={(e) => setMaxPrice(Number(e.target.value))}
+              className="w-full"
+            />
+            <p className="text-[10px] text-[#00ff88] font-[family-name:var(--font-mono)] text-center">{formatCurrency(maxPrice)}</p>
+          </div>
+          <div>
+            <label className="block text-[10px] text-[#777] uppercase tracking-wider mb-1">
+              Min Score
+            </label>
+            <input
+              type="range"
+              min={0}
+              max={90}
+              step={5}
+              value={minScore}
+              onChange={(e) => setMinScore(Number(e.target.value))}
+              className="w-full"
+            />
+            <p className="text-[10px] text-[#00ff88] font-[family-name:var(--font-mono)] text-center">{minScore}</p>
+          </div>
+          <div>
+            <label className="block text-[10px] text-[#777] uppercase tracking-wider mb-1">
+              Pages
+            </label>
+            <input
+              type="range"
+              min={1}
+              max={5}
+              step={1}
+              value={maxPages}
+              onChange={(e) => setMaxPages(Number(e.target.value))}
+              className="w-full"
+            />
+            <p className="text-[10px] text-[#00ff88] font-[family-name:var(--font-mono)] text-center">{maxPages}</p>
+          </div>
+        </div>
+        <button
+          onClick={startScan}
+          disabled={scanning}
+          className={`w-full py-3 rounded-lg font-bold text-sm uppercase tracking-wider transition-all ${
+            scanning
+              ? "bg-[#1a1a1a] text-[#555] cursor-not-allowed"
+              : "bg-[#00ff88] text-black hover:shadow-[0_0_30px_rgba(0,255,136,0.3)]"
+          }`}
+        >
+          {scanning ? "Scanning..." : "Scan for Deals"}
+        </button>
+        {scanning && (
+          <div className="bg-[#1a1a1a] border border-[#222] rounded-lg p-2">
+            <p className="text-xs text-[#00ff88] font-[family-name:var(--font-mono)]">
+              {progress.page > 0
+                ? `Page ${progress.page}/${progress.totalPages} · ${progress.count} found · ${deals.length} deals`
+                : "Initializing..."}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Main content */}
-      <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
+      <main className="flex-1 overflow-y-auto md:pb-0">
         {isDemo && (
           <div className="bg-yellow-900/30 border-b border-yellow-700/50 px-4 py-2 text-center text-sm text-yellow-300">
             Demo Mode — showing sample Cleveland data. Run locally on Mac mini for live Zillow scanning.
