@@ -655,6 +655,78 @@ export default function Home() {
   );
 }
 
+// --- Rehab & All-In Cost Estimator ---
+const CLOSING_COST_PCT = 0.03;
+const HQS_BUFFER = 3000;
+const HOLDING_COST_MONTHLY = 1500;
+const DOWN_PAYMENT_PCT = 0.15;
+const INTEREST_RATE = 0.08;
+const LOAN_TERM_YEARS = 30;
+const PROPERTY_TAX_RATE = 0.015;
+const INSURANCE_MONTHLY = 100;
+const MGMT_FEE_PCT = 0.10;
+
+type RehabTier = "light" | "moderate" | "heavy";
+
+function estimateRehab(price: number, sqft: number): { amount: number; tier: RehabTier; months: number } {
+  const pricePerSqft = sqft > 0 ? price / sqft : 60;
+
+  if (pricePerSqft < 40) {
+    // Very cheap per sqft = likely needs heavy work
+    const amount = Math.round(sqft > 0 ? sqft * 30 : 40000);
+    return { amount: Math.min(Math.max(amount, 25000), 55000), tier: "heavy", months: 4 };
+  } else if (pricePerSqft < 65) {
+    // Moderate
+    const amount = Math.round(sqft > 0 ? sqft * 18 : 22000);
+    return { amount: Math.min(Math.max(amount, 12000), 35000), tier: "moderate", months: 3 };
+  } else {
+    // Higher price/sqft = probably in better shape
+    const amount = Math.round(sqft > 0 ? sqft * 8 : 10000);
+    return { amount: Math.min(Math.max(amount, 5000), 18000), tier: "light", months: 2 };
+  }
+}
+
+function calcAllIn(price: number, rehabCost: number, rehabMonths: number, monthlyRent: number) {
+  const closing = Math.round(price * CLOSING_COST_PCT);
+  const holding = Math.round(HOLDING_COST_MONTHLY * rehabMonths);
+  const allInCost = price + rehabCost + closing + holding + HQS_BUFFER;
+  const downPayment = Math.round(allInCost * DOWN_PAYMENT_PCT);
+  const loanAmount = allInCost - downPayment;
+  const monthlyRate = INTEREST_RATE / 12;
+  const nPayments = LOAN_TERM_YEARS * 12;
+  const mortgage = monthlyRate === 0
+    ? loanAmount / nPayments
+    : loanAmount * (monthlyRate * Math.pow(1 + monthlyRate, nPayments)) / (Math.pow(1 + monthlyRate, nPayments) - 1);
+  const taxes = allInCost * PROPERTY_TAX_RATE / 12;
+  const insurance = INSURANCE_MONTHLY;
+  const management = monthlyRent * MGMT_FEE_PCT;
+  const totalExpenses = mortgage + taxes + insurance + management;
+  const monthlyCashFlow = monthlyRent - totalExpenses;
+  const annualCashFlow = monthlyCashFlow * 12;
+  const dscr = mortgage > 0 ? monthlyRent / mortgage : 0;
+  const cocReturn = downPayment > 0 ? (annualCashFlow / downPayment) * 100 : 0;
+  const rentToPrice = allInCost > 0 ? (monthlyRent / allInCost) * 100 : 0;
+
+  return {
+    allInCost, closing, holding, hqsBuffer: HQS_BUFFER, downPayment,
+    mortgage: Math.round(mortgage), totalExpenses: Math.round(totalExpenses),
+    monthlyCashFlow: Math.round(monthlyCashFlow), annualCashFlow: Math.round(annualCashFlow),
+    dscr, cocReturn, rentToPrice,
+  };
+}
+
+const TIER_COLORS: Record<RehabTier, string> = {
+  light: "text-[#00ff88]",
+  moderate: "text-[#ffcc00]",
+  heavy: "text-[#ff4444]",
+};
+
+const TIER_BG: Record<RehabTier, string> = {
+  light: "bg-[rgba(0,255,136,0.08)] border-[rgba(0,255,136,0.2)]",
+  moderate: "bg-[rgba(255,204,0,0.08)] border-[rgba(255,204,0,0.2)]",
+  heavy: "bg-[rgba(255,68,68,0.08)] border-[rgba(255,68,68,0.2)]",
+};
+
 function DealRow({
   deal,
   rank,
@@ -678,9 +750,17 @@ function DealRow({
   crimeGrade?: string;
   onExpand?: () => void;
 }) {
+  const rehab = estimateRehab(deal.price, deal.sqft);
+  const [rehabCost, setRehabCost] = useState(rehab.amount);
+  const [rehabMonths, setRehabMonths] = useState(rehab.months);
+  const [showAllIn, setShowAllIn] = useState(false);
+
   useEffect(() => {
     if (expanded && onExpand) onExpand();
   }, [expanded, onExpand]);
+
+  // Recalc all-in numbers
+  const allIn = calcAllIn(deal.price, rehabCost, rehabMonths, deal.monthly_rent);
 
   // Estimate PM savings: 10% of rent * 12 months minus $15/mo self-manage tools * 12
   const pmSavings = Math.round(deal.monthly_rent * 0.10 * 12 - 15 * 12);
@@ -735,6 +815,7 @@ function DealRow({
       {expanded && (
         <tr className="border-t border-[#1a1a1a]">
           <td colSpan={9} className="px-6 py-4 bg-[#0d0d0d]">
+            {/* As-Is Numbers */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
               <div>
                 <span className="text-[#555] uppercase tracking-wider block mb-1">
@@ -814,6 +895,134 @@ function DealRow({
               </div>
             </div>
 
+            {/* All-In Cost Calculator */}
+            <div className="mt-4 pt-3 border-t border-[#1a1a1a]">
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowAllIn(!showAllIn); }}
+                className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#777] hover:text-white transition-colors"
+              >
+                <span className={`transition-transform ${showAllIn ? "rotate-90" : ""}`}>▶</span>
+                All-In Cost Calculator
+                <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${TIER_BG[rehab.tier]}`}>
+                  <span className={TIER_COLORS[rehab.tier]}>Est. {rehab.tier} rehab</span>
+                </span>
+              </button>
+
+              {showAllIn && (
+                <div className="mt-3 space-y-3" onClick={(e) => e.stopPropagation()}>
+                  {/* Cost Breakdown */}
+                  <div className={`p-3 rounded border ${TIER_BG[rehab.tier]}`}>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+                      <div>
+                        <span className="text-[#555] uppercase tracking-wider block mb-1">Purchase</span>
+                        <span className="font-[family-name:var(--font-mono)] text-white">{formatCurrency(deal.price)}</span>
+                      </div>
+                      <div>
+                        <label className="text-[#555] uppercase tracking-wider block mb-1">
+                          Rehab Cost
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[#777] text-xs">$</span>
+                          <input
+                            type="number"
+                            value={rehabCost}
+                            onChange={(e) => setRehabCost(Math.max(0, parseInt(e.target.value) || 0))}
+                            className="w-24 bg-[#0a0a0a] border border-[#333] rounded px-2 py-1 font-[family-name:var(--font-mono)] text-white text-xs focus:border-[#00ff88] focus:outline-none"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[#555] uppercase tracking-wider block mb-1">
+                          Rehab Months
+                        </label>
+                        <input
+                          type="number"
+                          value={rehabMonths}
+                          onChange={(e) => setRehabMonths(Math.max(0, Math.min(12, parseInt(e.target.value) || 0)))}
+                          className="w-16 bg-[#0a0a0a] border border-[#333] rounded px-2 py-1 font-[family-name:var(--font-mono)] text-white text-xs focus:border-[#00ff88] focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <span className="text-[#555] uppercase tracking-wider block mb-1">Closing (3%)</span>
+                        <span className="font-[family-name:var(--font-mono)] text-[#777]">{formatCurrency(allIn.closing)}</span>
+                      </div>
+                      <div>
+                        <span className="text-[#555] uppercase tracking-wider block mb-1">Holding ({rehabMonths}mo)</span>
+                        <span className="font-[family-name:var(--font-mono)] text-[#777]">{formatCurrency(allIn.holding)}</span>
+                      </div>
+                      <div>
+                        <span className="text-[#555] uppercase tracking-wider block mb-1">HQS Buffer</span>
+                        <span className="font-[family-name:var(--font-mono)] text-[#777]">{formatCurrency(allIn.hqsBuffer)}</span>
+                      </div>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-[#333] flex items-center justify-between">
+                      <span className="text-xs font-bold uppercase tracking-wider text-white">All-In Cost</span>
+                      <span className="font-[family-name:var(--font-mono)] text-lg font-bold text-white">{formatCurrency(allIn.allInCost)}</span>
+                    </div>
+                  </div>
+
+                  {/* Recalculated Metrics — side by side */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                    <div className="p-2 rounded bg-[#111] border border-[#222]">
+                      <span className="text-[#555] uppercase tracking-wider block mb-1">Down Payment (15%)</span>
+                      <div className="flex items-baseline gap-2">
+                        <span className="font-[family-name:var(--font-mono)] text-white">{formatCurrency(allIn.downPayment)}</span>
+                        <span className="text-[10px] text-[#555]">was {formatCurrency(deal.down_payment)}</span>
+                      </div>
+                    </div>
+                    <div className="p-2 rounded bg-[#111] border border-[#222]">
+                      <span className="text-[#555] uppercase tracking-wider block mb-1">DSCR</span>
+                      <div className="flex items-baseline gap-2">
+                        <span className={`font-[family-name:var(--font-mono)] font-bold ${dscrColor(allIn.dscr)}`}>{allIn.dscr.toFixed(2)}</span>
+                        <span className="text-[10px] text-[#555]">was {deal.dscr.toFixed(2)}</span>
+                      </div>
+                    </div>
+                    <div className="p-2 rounded bg-[#111] border border-[#222]">
+                      <span className="text-[#555] uppercase tracking-wider block mb-1">Monthly Cash Flow</span>
+                      <div className="flex items-baseline gap-2">
+                        <span className={`font-[family-name:var(--font-mono)] font-bold ${cashFlowColor(allIn.monthlyCashFlow)}`}>
+                          {allIn.monthlyCashFlow >= 0 ? "+" : ""}{formatCurrency(allIn.monthlyCashFlow)}
+                        </span>
+                        <span className="text-[10px] text-[#555]">was {deal.monthly_cash_flow >= 0 ? "+" : ""}{formatCurrency(deal.monthly_cash_flow)}</span>
+                      </div>
+                    </div>
+                    <div className="p-2 rounded bg-[#111] border border-[#222]">
+                      <span className="text-[#555] uppercase tracking-wider block mb-1">Cash-on-Cash</span>
+                      <div className="flex items-baseline gap-2">
+                        <span className={`font-[family-name:var(--font-mono)] font-bold ${allIn.cocReturn > 0 ? "text-[#00ff88]" : "text-[#ff4444]"}`}>
+                          {allIn.cocReturn.toFixed(1)}%
+                        </span>
+                        <span className="text-[10px] text-[#555]">was {deal.coc_return.toFixed(1)}%</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Quick rehab presets */}
+                  <div className="flex gap-2 text-[10px]">
+                    <span className="text-[#555] uppercase tracking-wider self-center">Quick set:</span>
+                    {([
+                      { label: "Light ($10K)", cost: 10000, months: 2 },
+                      { label: "Moderate ($25K)", cost: 25000, months: 3 },
+                      { label: "Heavy ($40K)", cost: 40000, months: 4 },
+                      { label: "None ($0)", cost: 0, months: 0 },
+                    ] as const).map((preset) => (
+                      <button
+                        key={preset.label}
+                        onClick={() => { setRehabCost(preset.cost); setRehabMonths(preset.months); }}
+                        className={`px-2 py-1 rounded border transition-colors ${
+                          rehabCost === preset.cost
+                            ? "border-[#00ff88] text-[#00ff88] bg-[rgba(0,255,136,0.08)]"
+                            : "border-[#333] text-[#777] hover:border-[#555] hover:text-white"
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Neighborhood & Section 8 stats */}
             <div className="mt-4 pt-3 border-t border-[#1a1a1a] flex flex-wrap gap-4 items-center text-xs">
               {crimeGrade && (
@@ -857,14 +1066,10 @@ function DealRow({
                     e.stopPropagation();
                     onContactSeller();
                   }}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase border rounded-md transition-colors ${
-                    isInvestor
-                      ? "text-[#777] border-[#222] hover:border-[#00ff88] hover:text-[#00ff88]"
-                      : "text-[#555] border-[#222] hover:border-[#555]"
-                  }`}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase border rounded-md transition-colors text-[#777] border-[#222] hover:border-[#00ff88] hover:text-[#00ff88]"
                 >
                   <Mail size={10} />
-                  {isInvestor ? "Contact Seller" : "Contact Seller (Upgrade)"}
+                  Contact Seller
                 </button>
               )}
               {deal.zillow_url && (
