@@ -15,6 +15,7 @@ import {
   Mail,
   FileText,
   Lock,
+  Users,
 } from "lucide-react";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -24,6 +25,7 @@ const NAV_LINKS = [
   { href: "/", label: "Scanner", icon: Search },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/portfolio", label: "Portfolio", icon: Building2 },
+  { href: "/tenants", label: "Tenants", icon: Users },
   { href: "/outreach", label: "Outreach", icon: Mail, investorOnly: true },
   { href: "/reports", label: "Reports", icon: FileText, proOnly: true },
   { href: "/pricing", label: "Pricing", icon: CreditCard },

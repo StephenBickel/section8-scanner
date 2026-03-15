@@ -276,6 +276,75 @@ export interface FMRHistoryEntry {
   created_at: string;
 }
 
+export interface HousingAuthority {
+  id: string;
+  name: string;
+  city: string;
+  state: string;
+  county: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  address: string | null;
+  waitlist_status: "open" | "closed" | "unknown";
+  voucher_types: string[];
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PropertyListing {
+  id: string;
+  user_id: string;
+  portfolio_property_id: string | null;
+  address: string;
+  city: string;
+  state: string;
+  zip_code: string | null;
+  beds: number;
+  baths: number;
+  sqft: number | null;
+  monthly_rent: number;
+  hud_payment_standard: number | null;
+  description: string | null;
+  amenities: string[];
+  photos: string[];
+  section8_accepted: boolean;
+  pet_policy: string;
+  available_date: string | null;
+  listing_status: "draft" | "active" | "rented" | "archived";
+  gosection8_listing: string | null;
+  affordablehousing_listing: string | null;
+  socialserve_listing: string | null;
+  craigslist_listing: string | null;
+  facebook_listing: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TenantApplication {
+  id: string;
+  user_id: string;
+  listing_id: string | null;
+  portfolio_property_id: string | null;
+  applicant_name: string;
+  applicant_email: string | null;
+  applicant_phone: string | null;
+  voucher_amount: number | null;
+  voucher_expiry: string | null;
+  pha_name: string | null;
+  pha_contact: string | null;
+  household_size: number | null;
+  move_in_date: string | null;
+  status: "applied" | "screening" | "voucher_verified" | "approved" | "lease_signed" | "rejected" | "withdrawn";
+  screening_notes: string | null;
+  background_check_status: "pending" | "passed" | "failed" | "not_started";
+  eviction_check_status: "pending" | "passed" | "failed" | "not_started";
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export type PlanType = "free" | "pro" | "investor";
 
 export const PLAN_LIMITS = {

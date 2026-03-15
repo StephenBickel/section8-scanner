@@ -542,7 +542,7 @@ export default function Home() {
                 </p>
               </div>
               <div className="mt-6 text-[10px] text-[#555] font-[family-name:var(--font-mono)]">
-                Requires HUD_API_TOKEN env var for Fair Market Rent data
+                Scores each deal 0–100 using DSCR, cash flow, and HUD Fair Market Rent data
               </div>
             </div>
           </div>
