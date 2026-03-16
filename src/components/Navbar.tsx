@@ -15,17 +15,20 @@ import {
   FileText,
   Lock,
   Users,
+  Bookmark,
 } from "lucide-react";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuthStore } from "@/stores/auth";
 import { useScanStore } from "@/stores/scan";
+import { useSavedDealsStore } from "@/stores/saved-deals";
 
 const NAV_LINKS = [
   { href: "/", label: "Scanner", icon: Search },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/portfolio", label: "Portfolio", icon: Building2 },
   { href: "/tenants", label: "Tenants", icon: Users },
+  { href: "/saved", label: "Saved", icon: Bookmark },
   { href: "/outreach", label: "Outreach", icon: Mail },
   { href: "/reports", label: "Reports", icon: FileText },
 ];
@@ -35,6 +38,7 @@ export default function Navbar() {
   const router = useRouter();
   const { user, profile, setUser, setProfile, setLoading } = useAuthStore();
   const { scanning, deals, progress } = useScanStore();
+  const savedCount = useSavedDealsStore((s) => s.deals.length);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
@@ -124,6 +128,11 @@ export default function Navbar() {
                   {deals.length}
                 </span>
               )}
+              {href === "/saved" && savedCount > 0 && (
+                <span className="ml-1 text-[10px] font-bold font-[family-name:var(--font-mono)] text-[#ffcc00] bg-[rgba(255,204,0,0.12)] px-1.5 py-0.5 rounded-full">
+                  {savedCount}
+                </span>
+              )}
             </Link>
           );
         })}
@@ -192,6 +201,11 @@ export default function Navbar() {
                 <Icon size={16} />
                 {label}
                 {showLock && <Lock size={10} className="text-[#555]" />}
+                {href === "/saved" && savedCount > 0 && (
+                  <span className="ml-1 text-[10px] font-bold font-[family-name:var(--font-mono)] text-[#ffcc00] bg-[rgba(255,204,0,0.12)] px-1.5 py-0.5 rounded-full">
+                    {savedCount}
+                  </span>
+                )}
               </Link>
             );
           })}

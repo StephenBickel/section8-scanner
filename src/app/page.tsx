@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Bookmark, Building2, Mail, Shield, Gift, ExternalLink } from "lucide-react";
+import { Bookmark, BookmarkCheck, Building2, Download, Mail, Shield, Gift, ExternalLink } from "lucide-react";
 import CitySelector from "@/components/CitySelector";
 import CrimeGradeBadge from "@/components/CrimeGradeBadge";
 import OutreachModal from "@/components/OutreachModal";
@@ -9,6 +9,8 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuthStore } from "@/stores/auth";
 import { useScanStore } from "@/stores/scan";
 import { getGrantsForCity, TYPE_LABELS, TYPE_COLORS, type GrantProgram } from "@/lib/grants";
+import { useSavedDealsStore } from "@/stores/saved-deals";
+import { exportToCSV, exportToJSON } from "@/lib/export";
 
 interface Deal {
   address: string;
@@ -107,6 +109,28 @@ export default function Home() {
   const [neighborhoodCache, setNeighborhoodCache] = useState<Record<string, { crime_grade: string; crime_score: number }>>({});
 
   const { user, profile } = useAuthStore();
+  const { addDeal: saveDeal, removeDeal: unsaveDeal, isDealSaved } = useSavedDealsStore();
+
+  // Export handlers
+  const handleExportCSV = () => {
+    const cityLabel = city.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    const ts = new Date().toISOString().slice(0, 10);
+    exportToCSV(sortedDeals, `section8-${cityLabel}-${ts}`);
+  };
+  const handleExportJSON = () => {
+    const cityLabel = city.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    const ts = new Date().toISOString().slice(0, 10);
+    exportToJSON(sortedDeals, `section8-${cityLabel}-${ts}`);
+  };
+
+  // Toggle save/unsave deal
+  const toggleSaveDeal = (deal: Deal) => {
+    if (isDealSaved(deal.address)) {
+      unsaveDeal(deal.address);
+    } else {
+      saveDeal({ ...deal, city });
+    }
+  };
 
   // Fetch neighborhood data for deal zip codes
   const fetchNeighborhood = useCallback(async (zipCode: string) => {
@@ -520,12 +544,32 @@ export default function Home() {
                   ? `${sortedDeals.length}${sortedDeals.length !== deals.length ? ` of ${deals.length}` : ""} Deals Found`
                   : `${deals.length} deals so far...`}
               </h2>
-              {scanning && (
-                <div className="flex items-center gap-2 text-xs text-[#00ff88] font-[family-name:var(--font-mono)]">
-                  <span className="pulse-dot w-1.5 h-1.5 rounded-full bg-[#00ff88] inline-block" />
-                  Streaming...
-                </div>
-              )}
+              <div className="flex items-center gap-2">
+                {scanning && (
+                  <div className="flex items-center gap-2 text-xs text-[#00ff88] font-[family-name:var(--font-mono)]">
+                    <span className="pulse-dot w-1.5 h-1.5 rounded-full bg-[#00ff88] inline-block" />
+                    Streaming...
+                  </div>
+                )}
+                {sortedDeals.length > 0 && !scanning && (
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={handleExportCSV}
+                      className="flex items-center gap-1 text-[10px] font-bold uppercase px-2.5 py-1.5 rounded border border-[#333] text-[#777] hover:text-[#00ff88] hover:border-[#00ff88] transition-colors"
+                      title="Export to CSV (spreadsheet)"
+                    >
+                      <Download size={12} /> CSV
+                    </button>
+                    <button
+                      onClick={handleExportJSON}
+                      className="flex items-center gap-1 text-[10px] font-bold uppercase px-2.5 py-1.5 rounded border border-[#333] text-[#777] hover:text-[#00ff88] hover:border-[#00ff88] transition-colors"
+                      title="Export to JSON (raw data)"
+                    >
+                      <Download size={12} /> JSON
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Filter bar */}
@@ -701,6 +745,8 @@ export default function Home() {
                         crimeGrade={neighborhoodCache[deal.zip_code]?.crime_grade}
                         onExpand={() => fetchNeighborhood(deal.zip_code)}
                         citySlug={city}
+                        isSaved={isDealSaved(deal.address)}
+                        onToggleSave={() => toggleSaveDeal(deal)}
                       />
                     ))}
                   </tbody>
@@ -722,9 +768,17 @@ export default function Home() {
                         {formatCurrency(deal.price)} &middot; {deal.beds}bd/{deal.baths}ba
                       </p>
                     </div>
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-[family-name:var(--font-mono)] ${scoreBadgeColor(deal.score)}`}>
-                      {deal.score}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => toggleSaveDeal(deal)}
+                        className={`p-1 rounded transition-colors ${isDealSaved(deal.address) ? "text-[#ffcc00]" : "text-[#555] hover:text-[#ffcc00]"}`}
+                      >
+                        {isDealSaved(deal.address) ? <BookmarkCheck size={14} /> : <Bookmark size={14} />}
+                      </button>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-[family-name:var(--font-mono)] ${scoreBadgeColor(deal.score)}`}>
+                        {deal.score}
+                      </span>
+                    </div>
                   </div>
                   <div className="grid grid-cols-3 gap-2 text-[10px]">
                     <div>
@@ -1003,6 +1057,8 @@ function DealRow({
   crimeGrade,
   onExpand,
   citySlug,
+  isSaved,
+  onToggleSave,
 }: {
   deal: Deal;
   rank: number;
@@ -1015,6 +1071,8 @@ function DealRow({
   crimeGrade?: string;
   onExpand?: () => void;
   citySlug: string;
+  isSaved?: boolean;
+  onToggleSave?: () => void;
 }) {
   const rehab = estimateRehab(deal.price, deal.sqft);
   const [rehabCost, setRehabCost] = useState(rehab.amount);
@@ -1320,6 +1378,22 @@ function DealRow({
 
             {/* Action buttons in expanded row */}
             <div className="mt-4 pt-3 border-t border-[#1a1a1a] flex flex-wrap gap-2">
+              {onToggleSave && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleSave();
+                  }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase border rounded-md transition-colors ${
+                    isSaved
+                      ? "text-[#ffcc00] border-[#ffcc00] bg-[rgba(255,204,0,0.08)]"
+                      : "text-[#777] border-[#222] hover:border-[#ffcc00] hover:text-[#ffcc00]"
+                  }`}
+                >
+                  {isSaved ? <BookmarkCheck size={10} /> : <Bookmark size={10} />}
+                  {isSaved ? "Saved" : "Save Deal"}
+                </button>
+              )}
               {showPortfolioBtn && (
                 <button
                   onClick={(e) => {
