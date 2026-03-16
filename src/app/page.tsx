@@ -29,7 +29,10 @@ interface Deal {
   annual_cash_flow: number;
   rent_to_price: number;
   zip_code: string;
+  listing_type?: "standard" | "auction" | "pre_foreclosure" | "foreclosure" | "fsbo";
 }
+
+type ListingTypeFilter = "all" | "standard" | "auction" | "pre_foreclosure" | "foreclosure" | "fsbo";
 
 type SortKey = "score" | "price" | "dscr" | "monthly_cash_flow" | "coc_return";
 
@@ -54,6 +57,24 @@ function cashFlowColor(cf: number): string {
   return cf >= 0 ? "text-[#00ff88]" : "text-[#ff4444]";
 }
 
+const LISTING_TYPE_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
+  auction: { label: "Auction", color: "text-[#ff4444] bg-[rgba(255,68,68,0.12)] border-[rgba(255,68,68,0.3)]", icon: "🔨" },
+  pre_foreclosure: { label: "Pre-Foreclosure", color: "text-[#ffcc00] bg-[rgba(255,204,0,0.12)] border-[rgba(255,204,0,0.3)]", icon: "⚠️" },
+  foreclosure: { label: "Foreclosure", color: "text-[#ff8844] bg-[rgba(255,136,68,0.12)] border-[rgba(255,136,68,0.3)]", icon: "🏦" },
+  fsbo: { label: "FSBO", color: "text-[#88ccff] bg-[rgba(136,204,255,0.12)] border-[rgba(136,204,255,0.3)]", icon: "🏠" },
+  standard: { label: "Standard", color: "text-[#777] bg-[rgba(119,119,119,0.08)] border-[rgba(119,119,119,0.2)]", icon: "✓" },
+};
+
+function ListingTypeBadge({ type }: { type: string }) {
+  const config = LISTING_TYPE_CONFIG[type] || LISTING_TYPE_CONFIG.standard;
+  if (type === "standard") return null;
+  return (
+    <span className={`inline-flex items-center gap-1 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border ${config.color}`}>
+      {config.icon} {config.label}
+    </span>
+  );
+}
+
 export default function Home() {
   // Global scan state — persists across page navigations
   const {
@@ -66,6 +87,16 @@ export default function Home() {
   const [sortKey, setSortKey] = useState<SortKey>("score");
   const [sortAsc, setSortAsc] = useState(false);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
+
+  // Filters
+  const [listingTypeFilter, setListingTypeFilter] = useState<ListingTypeFilter>("all");
+  const [hideAuctions, setHideAuctions] = useState(false);
+  const [minPriceFilter, setMinPriceFilter] = useState(0);
+  const [maxBedsFilter, setMaxBedsFilter] = useState(0); // 0 = any
+  const [minBedsFilter, setMinBedsFilter] = useState(0); // 0 = any
+  const [minCashFlow, setMinCashFlow] = useState(0);
+  const [minDscr, setMinDscr] = useState(0);
+  const [showFilters, setShowFilters] = useState(false);
 
   // Save search state
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -159,7 +190,26 @@ export default function Home() {
     }
   };
 
-  const sortedDeals = [...deals].sort((a, b) => {
+  // Apply filters
+  const filteredDeals = deals.filter((d) => {
+    if (hideAuctions && (d.listing_type === "auction" || d.listing_type === "pre_foreclosure")) return false;
+    if (listingTypeFilter !== "all" && d.listing_type !== listingTypeFilter) return false;
+    if (minPriceFilter > 0 && d.price < minPriceFilter) return false;
+    if (minBedsFilter > 0 && d.beds < minBedsFilter) return false;
+    if (maxBedsFilter > 0 && d.beds > maxBedsFilter) return false;
+    if (minCashFlow > 0 && d.monthly_cash_flow < minCashFlow) return false;
+    if (minDscr > 0 && d.dscr < minDscr) return false;
+    return true;
+  });
+
+  // Count listing types for filter badges
+  const listingTypeCounts = deals.reduce((acc, d) => {
+    const t = d.listing_type || "standard";
+    acc[t] = (acc[t] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const sortedDeals = [...filteredDeals].sort((a, b) => {
     const mul = sortAsc ? 1 : -1;
     return (a[sortKey] - b[sortKey]) * mul;
   });
@@ -467,7 +517,7 @@ export default function Home() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm text-[#777] uppercase tracking-widest">
                 {scanDone
-                  ? `${deals.length} Deals Found`
+                  ? `${sortedDeals.length}${sortedDeals.length !== deals.length ? ` of ${deals.length}` : ""} Deals Found`
                   : `${deals.length} deals so far...`}
               </h2>
               {scanning && (
@@ -477,6 +527,137 @@ export default function Home() {
                 </div>
               )}
             </div>
+
+            {/* Filter bar */}
+            {deals.length > 0 && (
+              <div className="mb-4">
+                {/* Quick filters row */}
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  <button
+                    onClick={() => setShowFilters(!showFilters)}
+                    className={`text-xs font-bold uppercase px-3 py-1.5 rounded border transition-colors ${showFilters ? "border-[#00ff88] text-[#00ff88] bg-[rgba(0,255,136,0.08)]" : "border-[#333] text-[#777] hover:text-white hover:border-[#555]"}`}
+                  >
+                    ⚙ Filters {sortedDeals.length !== deals.length ? `(${deals.length - sortedDeals.length} hidden)` : ""}
+                  </button>
+
+                  {/* Auction toggle — always visible */}
+                  <button
+                    onClick={() => setHideAuctions(!hideAuctions)}
+                    className={`text-xs font-bold px-3 py-1.5 rounded border transition-colors ${hideAuctions ? "border-[#ff4444] text-[#ff4444] bg-[rgba(255,68,68,0.08)]" : "border-[#333] text-[#777] hover:text-white hover:border-[#555]"}`}
+                  >
+                    {hideAuctions ? "🔨 Auctions Hidden" : "🔨 Show Auctions"}
+                    {(listingTypeCounts["auction"] || 0) + (listingTypeCounts["pre_foreclosure"] || 0) > 0 && (
+                      <span className="ml-1 text-[10px] opacity-60">
+                        ({(listingTypeCounts["auction"] || 0) + (listingTypeCounts["pre_foreclosure"] || 0)})
+                      </span>
+                    )}
+                  </button>
+
+                  {/* Listing type quick filters */}
+                  {Object.entries(listingTypeCounts).map(([type, count]) => {
+                    const config = LISTING_TYPE_CONFIG[type] || LISTING_TYPE_CONFIG.standard;
+                    const active = listingTypeFilter === type;
+                    return (
+                      <button
+                        key={type}
+                        onClick={() => setListingTypeFilter(active ? "all" : type as ListingTypeFilter)}
+                        className={`text-[10px] font-bold uppercase px-2 py-1 rounded border transition-colors ${active ? config.color + " border-current" : "border-[#333] text-[#555] hover:text-[#999] hover:border-[#555]"}`}
+                      >
+                        {config.icon} {config.label} ({count})
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Advanced filters — collapsible */}
+                {showFilters && (
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3 p-3 rounded border border-[#222] bg-[#111] mb-2">
+                    <div>
+                      <label className="text-[10px] uppercase tracking-wider text-[#555] block mb-1">Min Price</label>
+                      <input
+                        type="number"
+                        value={minPriceFilter || ""}
+                        onChange={(e) => setMinPriceFilter(Number(e.target.value) || 0)}
+                        placeholder="$0"
+                        className="w-full px-2 py-1.5 text-xs font-[family-name:var(--font-mono)] bg-[#0a0a0a] border border-[#333] rounded text-white placeholder-[#555]"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] uppercase tracking-wider text-[#555] block mb-1">Min Beds</label>
+                      <select
+                        value={minBedsFilter}
+                        onChange={(e) => setMinBedsFilter(Number(e.target.value))}
+                        className="w-full px-2 py-1.5 text-xs bg-[#0a0a0a] border border-[#333] rounded text-white"
+                      >
+                        <option value={0}>Any</option>
+                        <option value={2}>2+</option>
+                        <option value={3}>3+</option>
+                        <option value={4}>4+</option>
+                        <option value={5}>5+</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] uppercase tracking-wider text-[#555] block mb-1">Max Beds</label>
+                      <select
+                        value={maxBedsFilter}
+                        onChange={(e) => setMaxBedsFilter(Number(e.target.value))}
+                        className="w-full px-2 py-1.5 text-xs bg-[#0a0a0a] border border-[#333] rounded text-white"
+                      >
+                        <option value={0}>Any</option>
+                        <option value={2}>2</option>
+                        <option value={3}>3</option>
+                        <option value={4}>4</option>
+                        <option value={5}>5</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] uppercase tracking-wider text-[#555] block mb-1">Min Cash Flow</label>
+                      <select
+                        value={minCashFlow}
+                        onChange={(e) => setMinCashFlow(Number(e.target.value))}
+                        className="w-full px-2 py-1.5 text-xs bg-[#0a0a0a] border border-[#333] rounded text-white"
+                      >
+                        <option value={0}>Any</option>
+                        <option value={200}>$200+/mo</option>
+                        <option value={500}>$500+/mo</option>
+                        <option value={750}>$750+/mo</option>
+                        <option value={1000}>$1,000+/mo</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] uppercase tracking-wider text-[#555] block mb-1">Min DSCR</label>
+                      <select
+                        value={minDscr}
+                        onChange={(e) => setMinDscr(Number(e.target.value))}
+                        className="w-full px-2 py-1.5 text-xs bg-[#0a0a0a] border border-[#333] rounded text-white"
+                      >
+                        <option value={0}>Any</option>
+                        <option value={1.25}>1.25+</option>
+                        <option value={1.5}>1.50+</option>
+                        <option value={2.0}>2.00+</option>
+                        <option value={2.5}>2.50+</option>
+                      </select>
+                    </div>
+                    <div className="col-span-2 md:col-span-5 flex justify-end">
+                      <button
+                        onClick={() => {
+                          setListingTypeFilter("all");
+                          setHideAuctions(false);
+                          setMinPriceFilter(0);
+                          setMinBedsFilter(0);
+                          setMaxBedsFilter(0);
+                          setMinCashFlow(0);
+                          setMinDscr(0);
+                        }}
+                        className="text-[10px] uppercase text-[#555] hover:text-white transition-colors"
+                      >
+                        Reset All Filters
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Desktop table */}
             <div className="hidden md:block border border-[#222] rounded-xl overflow-hidden bg-[#111]">
@@ -536,7 +717,7 @@ export default function Home() {
                 >
                   <div className="flex items-start justify-between mb-2">
                     <div>
-                      <p className="text-xs text-white font-medium">{deal.address}</p>
+                      <p className="text-xs text-white font-medium flex items-center gap-1.5">{deal.address} <ListingTypeBadge type={deal.listing_type || "standard"} /></p>
                       <p className="text-[10px] text-[#555] font-[family-name:var(--font-mono)]">
                         {formatCurrency(deal.price)} &middot; {deal.beds}bd/{deal.baths}ba
                       </p>
@@ -860,7 +1041,10 @@ function DealRow({
           {rank}
         </td>
         <td className="px-4 py-3 text-white whitespace-nowrap text-xs">
-          {deal.address}
+          <span className="flex items-center gap-2">
+            {deal.address}
+            <ListingTypeBadge type={deal.listing_type || "standard"} />
+          </span>
         </td>
         <td className="px-4 py-3 font-[family-name:var(--font-mono)] text-xs whitespace-nowrap">
           {formatCurrency(deal.price)}

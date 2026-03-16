@@ -53,6 +53,7 @@ export interface Deal {
   first_seen_at: string;
   last_seen_at: string;
   price_history: Array<{ price: number; date: string }>;
+  listing_type?: "standard" | "auction" | "pre_foreclosure" | "foreclosure" | "fsbo";
   is_active: boolean;
 }
 

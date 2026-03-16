@@ -19,6 +19,7 @@ interface Deal {
   annual_cash_flow: number;
   rent_to_price: number;
   zip_code: string;
+  listing_type?: "standard" | "auction" | "pre_foreclosure" | "foreclosure" | "fsbo";
 }
 
 interface ScanProgress {

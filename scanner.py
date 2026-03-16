@@ -65,6 +65,7 @@ def main():
             result["zip_code"] = prop.get("zip_code", "")
             result["hud_rent"] = rent
             result["zillow_url"] = prop.get("url", "")
+            result["listing_type"] = prop.get("listing_type", "standard")
             result["score"] = result.pop("deal_score")
             result["coc_return"] = result.pop("cash_on_cash")
 
