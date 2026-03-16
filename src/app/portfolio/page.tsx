@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Plus, Building2, DollarSign, TrendingUp, X, Settings, ChevronDown, ChevronUp } from "lucide-react";
-import AuthGuard from "@/components/AuthGuard";
+// AuthGuard removed — internal tool
 import SavingsCalculator from "@/components/SavingsCalculator";
 import { createClient } from "@/lib/supabase/client";
 import type { PortfolioProperty, ManagementExpense } from "@/lib/types";
@@ -540,8 +540,6 @@ function PortfolioContent() {
 
 export default function PortfolioPage() {
   return (
-    <AuthGuard>
       <PortfolioContent />
-    </AuthGuard>
   );
 }

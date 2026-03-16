@@ -15,7 +15,7 @@ import {
   Users,
   BarChart3,
 } from "lucide-react";
-import AuthGuard from "@/components/AuthGuard";
+// AuthGuard removed — internal tool, no auth gating
 import { createClient } from "@/lib/supabase/client";
 import { useAuthStore } from "@/stores/auth";
 import { DEFAULT_TEMPLATES } from "@/lib/email-templates";
@@ -546,9 +546,5 @@ function CreateCampaignModal({
 }
 
 export default function OutreachPage() {
-  return (
-    <AuthGuard>
-      <OutreachContent />
-    </AuthGuard>
-  );
+  return <OutreachContent />;
 }

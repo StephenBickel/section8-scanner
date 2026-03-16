@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Search, Clock, Bell, TrendingUp, FileText, AlertTriangle } from "lucide-react";
-import AuthGuard from "@/components/AuthGuard";
+// AuthGuard removed — internal tool
 import ResourceLinks from "@/components/ResourceLinks";
 import FMRTrendChart from "@/components/FMRTrendChart";
 import { createClient } from "@/lib/supabase/client";
@@ -291,8 +291,6 @@ function DashboardContent() {
 
 export default function DashboardPage() {
   return (
-    <AuthGuard>
       <DashboardContent />
-    </AuthGuard>
   );
 }

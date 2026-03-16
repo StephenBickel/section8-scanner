@@ -6,7 +6,7 @@ import {
   Globe, Phone, Mail, ExternalLink, Building2, Users, ClipboardList,
   FileText,
 } from "lucide-react";
-import AuthGuard from "@/components/AuthGuard";
+// AuthGuard removed — internal tool
 import CreateListingModal from "@/components/CreateListingModal";
 import AddApplicationModal from "@/components/AddApplicationModal";
 import ScreeningChecklist from "@/components/ScreeningChecklist";
@@ -671,8 +671,6 @@ function TenantsContent() {
 
 export default function TenantsPage() {
   return (
-    <AuthGuard>
       <TenantsContent />
-    </AuthGuard>
   );
 }

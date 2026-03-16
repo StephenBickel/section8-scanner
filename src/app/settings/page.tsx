@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import AuthGuard from "@/components/AuthGuard";
+// AuthGuard removed — internal tool
 import { createClient } from "@/lib/supabase/client";
 import { useAuthStore } from "@/stores/auth";
 import type { Profile, AlertPreferences } from "@/lib/types";
@@ -381,8 +381,6 @@ function SettingsContent() {
 
 export default function SettingsPage() {
   return (
-    <AuthGuard>
       <SettingsContent />
-    </AuthGuard>
   );
 }

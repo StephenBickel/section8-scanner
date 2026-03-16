@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { FileText, Plus, ChevronDown, Lock } from "lucide-react";
-import AuthGuard from "@/components/AuthGuard";
+// AuthGuard removed — internal tool, no auth gating
 import ReportViewer from "@/components/ReportViewer";
 import { createClient } from "@/lib/supabase/client";
 import { useAuthStore } from "@/stores/auth";
@@ -279,9 +279,5 @@ function ReportsContent() {
 }
 
 export default function ReportsPage() {
-  return (
-    <AuthGuard>
-      <ReportsContent />
-    </AuthGuard>
-  );
+  return <ReportsContent />;
 }
