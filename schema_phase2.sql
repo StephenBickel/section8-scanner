@@ -5,6 +5,7 @@
 -- ============================================
 CREATE TABLE seller_contacts (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   deal_id UUID REFERENCES deals(id) ON DELETE SET NULL,
   address TEXT NOT NULL,
   city TEXT NOT NULL,
@@ -19,6 +20,7 @@ CREATE TABLE seller_contacts (
 
 CREATE INDEX idx_seller_address ON seller_contacts(address);
 CREATE INDEX idx_seller_city ON seller_contacts(city);
+CREATE INDEX idx_seller_user ON seller_contacts(user_id);
 
 -- ============================================
 -- OUTREACH CAMPAIGNS
@@ -105,8 +107,10 @@ ALTER TABLE outreach_emails ENABLE ROW LEVEL SECURITY;
 ALTER TABLE neighborhood_scores ENABLE ROW LEVEL SECURITY;
 ALTER TABLE management_expenses ENABLE ROW LEVEL SECURITY;
 
--- Seller contacts: authenticated read (they come from deals which are public)
-CREATE POLICY seller_contacts_select ON seller_contacts FOR SELECT TO authenticated USING (true);
+-- Seller contact PII is private to the user who created it.
+CREATE POLICY seller_contacts_all ON seller_contacts FOR ALL TO authenticated
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
 
 -- Outreach: users own their campaigns and emails
 CREATE POLICY campaigns_all ON outreach_campaigns FOR ALL USING (auth.uid() = user_id);

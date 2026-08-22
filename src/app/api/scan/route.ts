@@ -1,140 +1,210 @@
+import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { NextRequest } from "next/server";
-import { spawn } from "child_process";
-import { existsSync } from "fs";
-import { join } from "path";
+
+import { parseScanRequest, toScanSearchParams } from "@/lib/security/scan-request";
+import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 300; // 5 min max (Pro plan), 60s on hobby
+export const maxDuration = 300;
 
-// Demo data shown when Mac mini tunnel is offline
+type ScannerMode = "demo" | "local" | "remote";
+
 const DEMO_DEALS = [
-  { address: "4104 Fulton Rd, Cleveland OH 44144", price: 48000, beds: 3, baths: 1, sqft: 1100, hud_rent: 1646, monthly_rent: 1646, dscr: 4.21, monthly_cash_flow: 987, coc_return: 137, score: 99, zillow_url: "https://www.zillow.com/homedetails/4104-Fulton-Rd-Cleveland-OH-44144/", mortgage: 391, expenses_total: 268, down_payment: 7200, annual_cash_flow: 11844, rent_to_price: 3.43, zip_code: "44144", listing_type: "standard" },
-  { address: "1842 E 93rd St, Cleveland OH 44106", price: 55000, beds: 3, baths: 1, sqft: 1200, hud_rent: 1646, monthly_rent: 1646, dscr: 3.67, monthly_cash_flow: 901, coc_return: 109, score: 98, zillow_url: "https://www.zillow.com/homedetails/1842-E-93rd-St-Cleveland-OH-44106/", mortgage: 448, expenses_total: 297, down_payment: 8250, annual_cash_flow: 10812, rent_to_price: 2.99, zip_code: "44106", listing_type: "foreclosure" },
-  { address: "14309 Triskett Rd, Cleveland OH 44111", price: 62000, beds: 3, baths: 1, sqft: 1050, hud_rent: 1646, monthly_rent: 1646, dscr: 3.18, monthly_cash_flow: 824, coc_return: 88, score: 95, zillow_url: "https://www.zillow.com/homedetails/14309-Triskett-Rd-Cleveland-OH-44111/", mortgage: 517, expenses_total: 305, down_payment: 9300, annual_cash_flow: 9888, rent_to_price: 2.65, zip_code: "44111", listing_type: "standard" },
-  { address: "3219 W 33rd St, Cleveland OH 44109", price: 19900, beds: 5, baths: 2, sqft: 1800, hud_rent: 1760, monthly_rent: 1760, dscr: 3.06, monthly_cash_flow: 789, coc_return: 75, score: 96, zillow_url: "https://www.zillow.com/homedetails/3219-W-33rd-St-Cleveland-OH-44109/", mortgage: 575, expenses_total: 396, down_payment: 10485, annual_cash_flow: 9468, rent_to_price: 2.52, zip_code: "44109", listing_type: "auction" },
-  { address: "480 E 115th St, Cleveland OH 44108", price: 74900, beds: 4, baths: 2, sqft: 1600, hud_rent: 1760, monthly_rent: 1760, dscr: 2.84, monthly_cash_flow: 712, coc_return: 63, score: 94, zillow_url: "https://www.zillow.com/homedetails/480-E-115th-St-Cleveland-OH-44108/35229791_zpid/", mortgage: 620, expenses_total: 428, down_payment: 11235, annual_cash_flow: 8544, rent_to_price: 2.35, zip_code: "44108", listing_type: "pre_foreclosure" },
-  { address: "3847 E 71st St, Cleveland OH 44105", price: 45000, beds: 2, baths: 1, sqft: 900, hud_rent: 1279, monthly_rent: 1279, dscr: 3.40, monthly_cash_flow: 710, coc_return: 105, score: 93, zillow_url: "https://www.zillow.com/homedetails/3847-E-71st-St-Cleveland-OH-44105/", mortgage: 376, expenses_total: 193, down_payment: 6750, annual_cash_flow: 8520, rent_to_price: 2.84, zip_code: "44105", listing_type: "standard" },
-  { address: "7916 Maryland Ave, Cleveland OH 44105", price: 85000, beds: 5, baths: 2, sqft: 2000, hud_rent: 1760, monthly_rent: 1760, dscr: 2.46, monthly_cash_flow: 584, coc_return: 48, score: 89, zillow_url: "https://www.zillow.com/homedetails/7916-Maryland-Ave-Cleveland-OH-44105/", mortgage: 715, expenses_total: 461, down_payment: 12750, annual_cash_flow: 7008, rent_to_price: 2.07, zip_code: "44105", listing_type: "fsbo" },
-  { address: "5230 Essen Ave, Cleveland OH 44105", price: 92000, beds: 4, baths: 1.5, sqft: 1500, hud_rent: 1760, monthly_rent: 1760, dscr: 2.27, monthly_cash_flow: 512, coc_return: 39, score: 82, zillow_url: "https://www.zillow.com/homedetails/5230-Essen-Ave-Cleveland-OH-44105/", mortgage: 775, expenses_total: 473, down_payment: 13800, annual_cash_flow: 6144, rent_to_price: 1.91, zip_code: "44105", listing_type: "standard" },
+  { address: "4104 Fulton Rd, Cleveland OH 44144", price: 48000, beds: 3, baths: 1, sqft: 1100, hud_rent: 1646, monthly_rent: 1646, dscr: 4.21, monthly_cash_flow: 987, coc_return: 137, score: 99, zillow_url: "https://www.zillow.com/", mortgage: 391, expenses_total: 268, down_payment: 7200, annual_cash_flow: 11844, rent_to_price: 3.43, zip_code: "44144", listing_type: "standard" },
+  { address: "1842 E 93rd St, Cleveland OH 44106", price: 55000, beds: 3, baths: 1, sqft: 1200, hud_rent: 1646, monthly_rent: 1646, dscr: 3.67, monthly_cash_flow: 901, coc_return: 109, score: 98, zillow_url: "https://www.zillow.com/", mortgage: 448, expenses_total: 297, down_payment: 8250, annual_cash_flow: 10812, rent_to_price: 2.99, zip_code: "44106", listing_type: "foreclosure" },
 ];
 
-function getPythonPath(): string {
-  const venvPath = join(process.env.HOME || "~", "Projects/section8-finder/venv/bin/python3");
-  if (existsSync(venvPath)) return venvPath;
-  const scraplingPath = join(process.env.HOME || "~", ".local/pipx/venvs/scrapling/bin/python3");
-  if (existsSync(scraplingPath)) return scraplingPath;
-  return "python3";
+let activeLocalScans = 0;
+
+function jsonError(message: string, status: number): Response {
+  return Response.json({ error: message }, { status });
+}
+
+function sseHeaders(): HeadersInit {
+  return {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache, no-transform",
+    "X-Accel-Buffering": "no",
+  };
+}
+
+function scannerMode(): ScannerMode | null {
+  const value = process.env.SCANNER_MODE || "demo";
+  return value === "demo" || value === "local" || value === "remote" ? value : null;
+}
+
+function configuredConcurrency(): number {
+  const parsed = Number(process.env.SCANNER_MAX_CONCURRENT || "1");
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 10 ? parsed : 1;
 }
 
 async function* demoStream(encoder: TextEncoder) {
   yield encoder.encode(`data: ${JSON.stringify({ type: "progress", page: 1, total_pages: 1, count: 0 })}\n\n`);
-  for (let i = 0; i < DEMO_DEALS.length; i++) {
-    await new Promise((r) => setTimeout(r, 300 + Math.random() * 200));
-    yield encoder.encode(`data: ${JSON.stringify({ type: "progress", page: 1, total_pages: 1, count: i + 1 })}\n\n`);
-    yield encoder.encode(`data: ${JSON.stringify({ type: "property", data: DEMO_DEALS[i] })}\n\n`);
+  for (let index = 0; index < DEMO_DEALS.length; index += 1) {
+    yield encoder.encode(`data: ${JSON.stringify({ type: "progress", page: 1, total_pages: 1, count: index + 1 })}\n\n`);
+    yield encoder.encode(`data: ${JSON.stringify({ type: "property", data: DEMO_DEALS[index] })}\n\n`);
   }
   yield encoder.encode(`data: ${JSON.stringify({ type: "done", total: DEMO_DEALS.length, deals: DEMO_DEALS.length, demo: true })}\n\n`);
 }
 
-export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const city = searchParams.get("city") || "cleveland-oh";
-  const maxPrice = searchParams.get("maxPrice") || "100000";
-  const minScore = searchParams.get("minScore") || "40";
-  const maxPages = searchParams.get("maxPages") || "3";
-
-  if (!/^[a-z0-9-]+$/i.test(city)) {
-    return new Response(JSON.stringify({ error: "Invalid city format" }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-
-  const encoder = new TextEncoder();
-
-  // SERVER-SIDE: check for Mac mini tunnel URL (set by startup script, read at request time)
-  const macMiniUrl = process.env.MAC_MINI_API_URL;
-
-  if (macMiniUrl) {
-    // Proxy to Mac mini FastAPI server — stream the SSE response
-    const upstreamUrl = `${macMiniUrl}/api/scan?${searchParams.toString()}`;
-    try {
-      const upstream = await fetch(upstreamUrl, {
-        headers: { Accept: "text/event-stream", "Cache-Control": "no-cache" },
-        signal: AbortSignal.timeout(290000), // 290s timeout
-      });
-      if (upstream.ok && upstream.body) {
-        // Pipe upstream SSE stream directly to client
-        const { readable, writable } = new TransformStream();
-        upstream.body.pipeTo(writable).catch(() => {});
-        return new Response(readable, {
-          headers: {
-            "Content-Type": "text/event-stream",
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-          },
-        });
-      }
-    } catch (err) {
-      console.error("Tunnel proxy error:", err);
-      // Fall through to local or demo
-    }
-  }
-
-  // LOCAL: Python subprocess (Mac mini running npm run dev)
-  const pythonPath = getPythonPath();
-  if (existsSync(pythonPath) || pythonPath === "python3") {
-    const scannerPath = join(process.cwd(), "scanner.py");
-    if (existsSync(scannerPath)) {
-      const stream = new ReadableStream({
-        start(controller) {
-          const proc = spawn(pythonPath, [
-            scannerPath,
-            "--city", city,
-            "--max-price", maxPrice,
-            "--min-score", minScore,
-            "--max-pages", maxPages,
-          ], { env: { ...process.env } });
-
-          let buffer = "";
-          proc.stdout.on("data", (chunk: Buffer) => {
-            buffer += chunk.toString();
-            const lines = buffer.split("\n");
-            buffer = lines.pop() || "";
-            for (const line of lines) {
-              if (line.trim()) controller.enqueue(encoder.encode(`data: ${line}\n\n`));
-            }
-          });
-          proc.stderr.on("data", (chunk: Buffer) => {
-            const msg = chunk.toString().trim();
-            if (msg) controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "log", message: msg })}\n\n`));
-          });
-          proc.on("close", (code) => {
-            if (buffer.trim()) controller.enqueue(encoder.encode(`data: ${buffer}\n\n`));
-            if (code !== 0) controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "error", message: `Scanner exited with code ${code}` })}\n\n`));
-            controller.close();
-          });
-          proc.on("error", (err) => {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "error", message: err.message })}\n\n`));
-            controller.close();
-          });
-        },
-      });
-      return new Response(stream, {
-        headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" },
-      });
-    }
-  }
-
-  // FALLBACK: Demo data
-  const stream = new ReadableStream({
+function demoResponse(encoder: TextEncoder): Response {
+  return new Response(new ReadableStream({
     async start(controller) {
       for await (const chunk of demoStream(encoder)) controller.enqueue(chunk);
       controller.close();
     },
+  }), { headers: sseHeaders() });
+}
+
+async function remoteResponse(query: URLSearchParams, request: NextRequest): Promise<Response> {
+  const baseUrl = process.env.SCANNER_API_URL || process.env.MAC_MINI_API_URL;
+  const apiKey = process.env.SCANNER_API_KEY;
+  if (!baseUrl || !apiKey) {
+    return jsonError("Remote scanner is not configured", 503);
+  }
+
+  let upstreamUrl: URL;
+  try {
+    upstreamUrl = new URL("/api/scan", baseUrl);
+    if (!['http:', 'https:'].includes(upstreamUrl.protocol)) throw new Error("unsupported protocol");
+  } catch {
+    return jsonError("Remote scanner is not configured", 503);
+  }
+  upstreamUrl.search = query.toString();
+
+  try {
+    const upstream = await fetch(upstreamUrl, {
+      headers: {
+        Accept: "text/event-stream",
+        "Cache-Control": "no-cache",
+        "X-Scanner-Key": apiKey,
+      },
+      signal: AbortSignal.any([request.signal, AbortSignal.timeout(290_000)]),
+    });
+    if (!upstream.ok || !upstream.body) {
+      console.error("Remote scanner returned a non-success response", upstream.status);
+      return jsonError("Scanner unavailable", 502);
+    }
+    return new Response(upstream.body, { headers: sseHeaders() });
+  } catch {
+    console.error("Remote scanner request failed");
+    return jsonError("Scanner unavailable", 502);
+  }
+}
+
+function localResponse(
+  query: ReturnType<typeof parseScanRequest>,
+  encoder: TextEncoder,
+  request: NextRequest
+): Response {
+  const scannerPath = process.env.SCANNER_SCRIPT || join(process.cwd(), "scanner.py");
+  if (!existsSync(/* turbopackIgnore: true */ scannerPath)) return jsonError("Local scanner is not configured", 503);
+  if (activeLocalScans >= configuredConcurrency()) return jsonError("Scanner is busy", 429);
+
+  activeLocalScans += 1;
+  let released = false;
+  let child: ReturnType<typeof spawn> | undefined;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+
+  const release = () => {
+    if (!released) {
+      released = true;
+      activeLocalScans -= 1;
+    }
+    if (timeout) clearTimeout(timeout);
+  };
+
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      let closed = false;
+      let buffer = "";
+      const close = () => {
+        if (!closed) {
+          closed = true;
+          controller.close();
+        }
+        release();
+      };
+      const abort = () => {
+        child?.kill("SIGTERM");
+        close();
+      };
+      request.signal.addEventListener("abort", abort, { once: true });
+
+      const proc = spawn(/* turbopackIgnore: true */ process.env.SCANNER_PYTHON || "python3", [
+        scannerPath,
+        "--city", query.city,
+        "--max-price", String(query.maxPrice),
+        "--min-score", String(query.minScore),
+        "--max-pages", String(query.maxPages),
+      ], { env: { ...process.env } });
+      child = proc;
+
+      timeout = setTimeout(() => {
+        child?.kill("SIGTERM");
+        if (!closed) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "error", message: "Scanner timed out" })}\n\n`));
+        }
+      }, 280_000);
+
+      proc.stdout.on("data", (chunk: Buffer) => {
+        if (closed) return;
+        buffer += chunk.toString();
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          if (line.trim()) controller.enqueue(encoder.encode(`data: ${line}\n\n`));
+        }
+      });
+      proc.stderr.on("data", () => {
+        console.error("Local scanner wrote diagnostic output");
+      });
+      proc.on("close", (code) => {
+        if (!closed && buffer.trim()) controller.enqueue(encoder.encode(`data: ${buffer}\n\n`));
+        if (!closed && code !== 0) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "error", message: "Scanner failed" })}\n\n`));
+        }
+        request.signal.removeEventListener("abort", abort);
+        close();
+      });
+      proc.on("error", () => {
+        if (!closed) controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "error", message: "Scanner unavailable" })}\n\n`));
+        request.signal.removeEventListener("abort", abort);
+        close();
+      });
+    },
+    cancel() {
+      child?.kill("SIGTERM");
+      release();
+    },
   });
-  return new Response(stream, {
-    headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" },
-  });
+
+  return new Response(stream, { headers: sseHeaders() });
+}
+
+export async function GET(request: NextRequest) {
+  let scanRequest: ReturnType<typeof parseScanRequest>;
+  try {
+    scanRequest = parseScanRequest(new URL(request.url).searchParams);
+  } catch (error) {
+    return jsonError(error instanceof Error ? error.message : "Invalid scan request", 400);
+  }
+
+  const mode = scannerMode();
+  if (!mode) return jsonError("Invalid scanner configuration", 503);
+
+  const encoder = new TextEncoder();
+  if (mode === "demo") return demoResponse(encoder);
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return jsonError("Unauthorized", 401);
+
+  if (mode === "remote") {
+    return remoteResponse(toScanSearchParams(scanRequest), request);
+  }
+  return localResponse(scanRequest, encoder, request);
 }

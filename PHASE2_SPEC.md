@@ -5,9 +5,9 @@ Phase 1 is complete (auth, dashboard, portfolio, pricing, Stripe). Build compile
 Phase 2 database tables already deployed to Supabase (see schema_phase2.sql).
 
 ## Supabase Details (same project)
-- **Ref:** `heocvgxhgmludycstedj`
-- **URL:** `https://heocvgxhgmludycstedj.supabase.co`
-- **Anon Key:** `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhlb2N2Z3hoZ21sdWR5Y3N0ZWRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxMTg5NjUsImV4cCI6MjA4ODY5NDk2NX0.U33nbsyLudPHme0X5ZWeVoxu1UkgsJfpjUZmrOqKe2Q`
+- **Ref:** `your-project-ref`
+- **URL:** `https://your-project-ref.supabase.co`
+- **Anon Key:** `YOUR_SUPABASE_KEY`
 
 ## Design System (MUST MATCH — same as Phase 1)
 - Background: `#0a0a0a` / Surface: `#111` / Surface2: `#1a1a1a` / Border: `#222`
@@ -54,7 +54,7 @@ Create API route `/api/neighborhood/[zipCode]/route.ts`:
 - "Payment Standard" label instead of just "HUD FMR"
 - Neighborhood score summary
 
-**Update the Python scorer** (`~/Projects/section8-finder/scorer.py`):
+**Update the Python scorer** (`<path-to-scanner-provider>/scorer.py`):
 - Replace the `crime_score = 100` placeholder with actual crime data
 - Crime grade A = 100 points, B = 80, C = 60, D = 40, F = 20
 - This changes the deal_score calculation to factor in real crime data

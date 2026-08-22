@@ -1,5 +1,5 @@
 -- Section 8 Scanner — Full Database Schema
--- Supabase project: heocvgxhgmludycstedj
+-- Run this schema in your own Supabase project.
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
@@ -182,7 +182,11 @@ ALTER TABLE deals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fmr_history ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY profiles_select ON profiles FOR SELECT USING (auth.uid() = id);
-CREATE POLICY profiles_update ON profiles FOR UPDATE USING (auth.uid() = id);
+CREATE POLICY profiles_update ON profiles FOR UPDATE
+  USING (auth.uid() = id)
+  WITH CHECK (auth.uid() = id);
+REVOKE UPDATE ON TABLE profiles FROM authenticated;
+GRANT UPDATE (full_name, updated_at) ON TABLE profiles TO authenticated;
 CREATE POLICY searches_all ON saved_searches FOR ALL USING (auth.uid() = user_id);
 CREATE POLICY alerts_select ON alerts FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY portfolio_all ON portfolio_properties FOR ALL USING (auth.uid() = user_id);
@@ -198,11 +202,11 @@ CREATE POLICY scans_insert ON scan_runs FOR INSERT WITH CHECK (auth.uid() = user
 CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO profiles (id, email, full_name)
+  INSERT INTO public.profiles (id, email, full_name)
   VALUES (NEW.id, NEW.email, NEW.raw_user_meta_data ->> 'full_name');
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
@@ -211,8 +215,8 @@ CREATE TRIGGER on_auth_user_created
 CREATE OR REPLACE FUNCTION reset_daily_scans()
 RETURNS void AS $$
 BEGIN
-  UPDATE profiles
+  UPDATE public.profiles
   SET daily_scans_used = 0, daily_scans_reset_at = NOW()
   WHERE daily_scans_reset_at < NOW() - INTERVAL '24 hours';
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
