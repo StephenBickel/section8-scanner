@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { safeZillowUrl } from "@/lib/security/scanner-url";
 
 interface Deal {
   address: string;
@@ -147,7 +148,8 @@ export const useScanStore = create<ScanState>((set, get) => ({
             const msg = JSON.parse(jsonStr);
 
             if (msg.type === "property") {
-              set((s) => ({ deals: [...s.deals, msg.data as Deal] }));
+              const deal = msg.data as Deal;
+              set((s) => ({ deals: [...s.deals, { ...deal, zillow_url: safeZillowUrl(deal.zillow_url) ?? "" }] }));
             } else if (msg.type === "progress") {
               set({
                 progress: {

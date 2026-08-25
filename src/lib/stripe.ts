@@ -33,7 +33,7 @@ export const PLAN_DETAILS = {
     price: 29,
     priceId: PRICE_IDS.pro_monthly,
     features: [
-      "Unlimited scans",
+      "50 scans per day",
       "Save searches & alerts",
       "Portfolio tracking (10 properties)",
       "PDF deal reports",
@@ -51,6 +51,7 @@ export const PLAN_DETAILS = {
     priceId: PRICE_IDS.investor_monthly,
     features: [
       "Everything in Pro",
+      "200 scans per day",
       "Unlimited portfolio properties",
       "API access",
       "Bulk CSV export",

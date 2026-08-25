@@ -325,7 +325,7 @@ function PortfolioSummaryReport({ data }: { data: Record<string, unknown> }) {
       {chartData.length > 0 && (
         <div>
           <div className="text-[10px] text-[#777] uppercase tracking-wider mb-3">Monthly Rent by Property</div>
-          <ResponsiveContainer width="100%" height={200}>
+          <ResponsiveContainer width="100%" height={200} minWidth={0} minHeight={0}>
             <BarChart data={chartData}>
               <XAxis dataKey="name" tick={{ fill: "#555", fontSize: 10 }} axisLine={{ stroke: "#222" }} tickLine={false} />
               <YAxis tick={{ fill: "#555", fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `$${v}`} />

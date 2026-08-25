@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { parseSavedSearch } from "@/lib/security/saved-search";
+import { safeZillowUrl } from "@/lib/security/scanner-url";
 
 function getServiceClient() {
   return createClient(
@@ -11,6 +13,7 @@ function getServiceClient() {
 // Rate limit: process at most 5 searches concurrently with 2s delay between batches
 const MAX_CONCURRENT = 5;
 const DELAY_MS = 2000;
+const MAX_SEARCHES_PER_RUN = 100;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -28,7 +31,8 @@ export async function POST(request: NextRequest) {
   const { data: searches, error: searchError } = await supabase
     .from("saved_searches")
     .select("*")
-    .eq("alert_enabled", true);
+    .eq("alert_enabled", true)
+    .limit(MAX_SEARCHES_PER_RUN);
 
   if (searchError) {
     return NextResponse.json({ error: searchError.message }, { status: 500 });
@@ -48,7 +52,14 @@ export async function POST(request: NextRequest) {
     const batch = searches.slice(i, i + MAX_CONCURRENT);
 
     const results = await Promise.allSettled(
-      batch.map((search) => processSearch(supabase, scannerUrl, search)),
+      batch.map((search) => {
+        try {
+          parseSavedSearch(search);
+          return processSearch(supabase, scannerUrl, search);
+        } catch {
+          return Promise.resolve({ newDeals: 0, priceChanges: 0 });
+        }
+      }),
     );
 
     for (const result of results) {
@@ -140,7 +151,7 @@ async function processSearch(
           mortgage: Number(deal.mortgage ?? 0),
           expenses_total: Number(deal.expenses_total ?? 0),
           deal_score: Number(deal.score ?? 0),
-          zillow_url: deal.zillow_url ? String(deal.zillow_url) : null,
+          zillow_url: safeZillowUrl(deal.zillow_url),
           is_active: true,
         });
 
@@ -158,7 +169,7 @@ async function processSearch(
             hud_rent: deal.hud_rent ? Number(deal.hud_rent) : null,
             beds: Number(deal.beds ?? 0),
             baths: Number(deal.baths ?? 0),
-            zillow_url: deal.zillow_url ? String(deal.zillow_url) : null,
+            zillow_url: safeZillowUrl(deal.zillow_url),
           },
         });
 

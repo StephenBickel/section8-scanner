@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { NextRequest } from "next/server";
 
 import { parseScanRequest, toScanSearchParams } from "@/lib/security/scan-request";
+import { isAllowedScannerUrl } from "@/lib/security/scanner-url";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -69,7 +70,7 @@ async function remoteResponse(query: URLSearchParams, request: NextRequest): Pro
   let upstreamUrl: URL;
   try {
     upstreamUrl = new URL("/api/scan", baseUrl);
-    if (!['http:', 'https:'].includes(upstreamUrl.protocol)) throw new Error("unsupported protocol");
+    if (!isAllowedScannerUrl(upstreamUrl.toString())) throw new Error("unsafe scanner URL");
   } catch {
     return jsonError("Remote scanner is not configured", 503);
   }
@@ -83,6 +84,7 @@ async function remoteResponse(query: URLSearchParams, request: NextRequest): Pro
         "X-Scanner-Key": apiKey,
       },
       signal: AbortSignal.any([request.signal, AbortSignal.timeout(290_000)]),
+      redirect: "error",
     });
     if (!upstream.ok || !upstream.body) {
       console.error("Remote scanner returned a non-success response", upstream.status);
@@ -202,6 +204,13 @@ export async function GET(request: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return jsonError("Unauthorized", 401);
+
+  const { data: allowed, error: quotaError } = await supabase.rpc("consume_scan_allowance");
+  if (quotaError) {
+    console.error("Unable to enforce scan quota");
+    return jsonError("Scanner unavailable", 503);
+  }
+  if (!allowed) return jsonError("Daily scan limit reached", 429);
 
   if (mode === "remote") {
     return remoteResponse(toScanSearchParams(scanRequest), request);

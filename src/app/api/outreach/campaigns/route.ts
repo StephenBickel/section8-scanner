@@ -30,17 +30,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Check plan
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("plan")
-    .eq("id", user.id)
-    .single();
-
-  if (false) { // Internal tool — no plan gating
-    return NextResponse.json({ error: "Investor plan required" }, { status: 403 });
-  }
-
   const body = await request.json();
   const { name, template_subject, template_body, status, auto_send, min_deal_score } = body;
 

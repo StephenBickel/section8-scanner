@@ -59,6 +59,7 @@ export default function CreateListingModal({ open, onClose, onCreated, editListi
 
   useEffect(() => {
     if (editListing) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reset the controlled editor when its record changes
       setForm({
         address: editListing.address,
         city: editListing.city,

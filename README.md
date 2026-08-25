@@ -108,14 +108,15 @@ not read shell startup files or mutate a specific Vercel project.
 
 ## Existing Supabase projects
 
-Apply `migrations/20260821_public_release_security.sql` before making an
-existing deployment public. It removes the old global seller-contact policy and
-limits profile updates to `full_name` and `updated_at`.
+Apply the SQL files in `migrations/` in filename order before making an existing
+deployment public. They remove the old global seller-contact policy, restrict
+profile updates, add bounded saved-search criteria, and install the atomic scan
+quota used by live scanner modes.
 
 Legacy seller contacts cannot be assigned safely by an automated migration.
 They remain hidden until an administrator sets each row's correct `user_id`.
-After backfilling all rows, apply the `NOT NULL` statement included at the end
-of the migration.
+After backfilling all rows, set `seller_contacts.user_id` to `NOT NULL`. The
+migration does this automatically when no unowned legacy rows remain.
 
 ## Environment and secrets
 

@@ -9,11 +9,15 @@ const read = (path: string) => readFileSync(resolve(root, path), "utf8");
 describe("database authorization", () => {
   it("scopes seller contacts to their owner", () => {
     const schema = read("schema_phase2.sql");
+    const migration = read("migrations/20260821_public_release_security.sql");
     const route = read("src/app/api/outreach/contacts/route.ts");
 
     expect(schema).toMatch(/seller_contacts[\s\S]*user_id UUID NOT NULL REFERENCES profiles\(id\)/);
     expect(schema).toMatch(/seller_contacts_all[\s\S]*auth\.uid\(\) = user_id/);
     expect(schema).not.toMatch(/seller_contacts_select[\s\S]*USING \(true\)/);
+    expect(migration).toMatch(/ALTER COLUMN user_id SET NOT NULL/);
+    expect(migration).toMatch(/REVOKE ALL ON TABLE public\.seller_contacts FROM anon, authenticated/i);
+    expect(migration).toMatch(/GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public\.seller_contacts TO authenticated/i);
     expect(route).toContain('.eq("user_id", user.id)');
     expect(route).toMatch(/\.insert\(\{[\s\S]*user_id: user\.id/);
     expect(route).not.toContain('.select("*")');
@@ -21,10 +25,26 @@ describe("database authorization", () => {
 
   it("limits authenticated profile updates to display fields", () => {
     const schema = read("schema.sql");
+    const migration = read("migrations/20260821_public_release_security.sql");
 
-    expect(schema).toMatch(/REVOKE UPDATE ON TABLE profiles FROM authenticated/i);
+    expect(schema).toMatch(/REVOKE ALL ON TABLE profiles FROM anon, authenticated/i);
+    expect(schema).toMatch(/GRANT SELECT ON TABLE profiles TO authenticated/i);
     expect(schema).toMatch(/GRANT UPDATE \(full_name, updated_at\) ON TABLE profiles TO authenticated/i);
     expect(schema).toMatch(/profiles_update[\s\S]*WITH CHECK \(auth\.uid\(\) = id\)/);
+    expect(migration).toMatch(/REVOKE ALL ON TABLE public\.profiles FROM anon, authenticated/i);
+    expect(migration).toMatch(/GRANT SELECT ON TABLE public\.profiles TO authenticated/i);
+    expect(migration).toMatch(/profiles_select[\s\S]*FOR SELECT TO authenticated/i);
+  });
+
+  it("keeps privileged maintenance functions out of the public API", () => {
+    const schema = read("schema.sql");
+    const migration = read("migrations/20260821_public_release_security.sql");
+
+    for (const sql of [schema, migration]) {
+      expect(sql).toMatch(/REVOKE ALL ON FUNCTION public\.handle_new_user\(\) FROM PUBLIC, anon, authenticated/i);
+      expect(sql).toMatch(/REVOKE ALL ON FUNCTION public\.reset_daily_scans\(\) FROM PUBLIC, anon, authenticated/i);
+      expect(sql).toMatch(/ALTER FUNCTION public\.reset_daily_scans\(\) SET search_path = ''/i);
+    }
   });
 });
 
@@ -35,8 +55,20 @@ describe("scanner execution boundary", () => {
     expect(route).toContain("parseScanRequest");
     expect(route).toContain("supabase.auth.getUser()");
     expect(route).toContain("SCANNER_API_KEY");
+    expect(route).toContain('redirect: "error"');
+    expect(route).toContain('rpc("consume_scan_allowance")');
     expect(route).not.toMatch(/message:\s*err\.message/);
     expect(route).not.toMatch(/message:\s*msg/);
+  });
+
+  it("caps scheduled and user-created saved searches", () => {
+    const savedSearches = read("src/app/api/saved-searches/route.ts");
+    const cron = read("src/app/api/cron/scan/route.ts");
+
+    expect(savedSearches).toContain("parseSavedSearch");
+    expect(savedSearches).toContain("MAX_SAVED_SEARCHES_PER_USER");
+    expect(cron).toContain("MAX_SEARCHES_PER_RUN");
+    expect(cron).toMatch(/\.limit\(MAX_SEARCHES_PER_RUN\)/);
   });
 
   it("protects and bounds the FastAPI scanner", () => {
