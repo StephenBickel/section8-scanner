@@ -31,9 +31,9 @@ export default function CitySelector({ value, onChange, openDirection = "auto" }
   // Check if user typed a custom city value (city-state format)
   const isCustomFormat = /^[a-z0-9]+-[a-z]{2}$/i.test(search.trim());
 
-  // Determine if dropdown should open upward
-  useEffect(() => {
-    if (open && containerRef.current && openDirection === "auto") {
+  const toggleOpen = () => {
+    const nextOpen = !open;
+    if (nextOpen && containerRef.current && openDirection === "auto") {
       const rect = containerRef.current.getBoundingClientRect();
       const spaceBelow = window.innerHeight - rect.bottom;
       const spaceAbove = rect.top;
@@ -43,7 +43,9 @@ export default function CitySelector({ value, onChange, openDirection = "auto" }
     } else if (openDirection === "down") {
       setDropUp(false);
     }
-  }, [open, openDirection]);
+    setOpen(nextOpen);
+    if (nextOpen) setTimeout(() => inputRef.current?.focus(), 50);
+  };
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -74,10 +76,7 @@ export default function CitySelector({ value, onChange, openDirection = "auto" }
     <div ref={containerRef} className="relative">
       <button
         type="button"
-        onClick={() => {
-          setOpen(!open);
-          if (!open) setTimeout(() => inputRef.current?.focus(), 50);
-        }}
+        onClick={toggleOpen}
         className="w-full flex items-center justify-between px-3 py-2.5 bg-[#1a1a1a] border border-[#222] rounded-lg text-sm font-[family-name:var(--font-mono)] focus:border-[#00ff88] focus:outline-none transition-colors text-left"
       >
         <span className={selected ? "text-white" : "text-[#555]"}>

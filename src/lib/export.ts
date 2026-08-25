@@ -20,7 +20,13 @@ interface ExportDeal {
   listing_type?: string;
 }
 
-export function exportToCSV(deals: ExportDeal[], filename: string = "section8-deals") {
+function encodeCsvCell(value: string | number): string {
+  let text = String(value);
+  if (typeof value === "string" && /^[\t\r\n ]*[=+\-@]/.test(text)) text = `'${text}`;
+  return `"${text.replaceAll('"', '""')}"`;
+}
+
+export function serializeDealsToCSV(deals: ExportDeal[]): string {
   const headers = [
     "Rank",
     "Address",
@@ -45,7 +51,7 @@ export function exportToCSV(deals: ExportDeal[], filename: string = "section8-de
 
   const rows = deals.map((d, i) => [
     i + 1,
-    `"${d.address}"`,
+    d.address,
     d.price,
     d.beds,
     d.baths,
@@ -65,8 +71,11 @@ export function exportToCSV(deals: ExportDeal[], filename: string = "section8-de
     d.zillow_url,
   ]);
 
-  const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
-  downloadFile(csv, `${filename}.csv`, "text/csv");
+  return [headers, ...rows].map((row) => row.map(encodeCsvCell).join(",")).join("\n");
+}
+
+export function exportToCSV(deals: ExportDeal[], filename: string = "section8-deals") {
+  downloadFile(serializeDealsToCSV(deals), `${filename}.csv`, "text/csv");
 }
 
 export function exportToJSON(deals: ExportDeal[], filename: string = "section8-deals") {

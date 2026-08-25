@@ -6,9 +6,9 @@ Phase 3 tables already deployed to Supabase (see schema_phase3.sql).
 Build compiles clean with 35 files, 18 routes.
 
 ## Supabase Details (same project)
-- **Ref:** `heocvgxhgmludycstedj`
-- **URL:** `https://heocvgxhgmludycstedj.supabase.co`
-- **Anon Key:** `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhlb2N2Z3hoZ21sdWR5Y3N0ZWRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxMTg5NjUsImV4cCI6MjA4ODY5NDk2NX0.U33nbsyLudPHme0X5ZWeVoxu1UkgsJfpjUZmrOqKe2Q`
+- **Ref:** `your-project-ref`
+- **URL:** `https://your-project-ref.supabase.co`
+- **Anon Key:** `YOUR_SUPABASE_KEY`
 
 ## Design System (MUST MATCH — exact same as Phase 1 & 2)
 - Background: `#0a0a0a` / Surface: `#111` / Surface2: `#1a1a1a` / Border: `#222`
@@ -184,7 +184,7 @@ Add TypeScript interfaces for:
 - Label each line item with source: "Property Tax (Cuyahoga Co. 2.44%)" instead of generic
 - Show comparison: "Estimated vs National Average" for tax and insurance
 
-**Update Python Scorer** — Modify `~/Projects/section8-finder/scorer.py`:
+**Update Python Scorer** — Modify `<path-to-scanner-provider>/scorer.py`:
 - Add optional `tax_rate` and `insurance_monthly` parameters to `score_deal()`
 - If provided, use real values instead of config defaults
 - This allows the cron scanner to pass real rates per property

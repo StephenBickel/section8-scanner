@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { parseSavedSearch } from "@/lib/security/saved-search";
+
+const MAX_SAVED_SEARCHES_PER_USER = 20;
 
 function getSupabase(request: NextRequest) {
   const response = NextResponse.next();
@@ -57,19 +60,27 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = await request.json();
+  let body: ReturnType<typeof parseSavedSearch>;
+  try {
+    body = parseSavedSearch(await request.json());
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Invalid saved search" }, { status: 400 });
+  }
+
+  const { count, error: countError } = await supabase
+    .from("saved_searches")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id);
+  if (countError) return NextResponse.json({ error: "Unable to create saved search" }, { status: 500 });
+  if ((count ?? 0) >= MAX_SAVED_SEARCHES_PER_USER) {
+    return NextResponse.json({ error: "Saved search limit reached" }, { status: 429 });
+  }
 
   const { data, error } = await supabase
     .from("saved_searches")
     .insert({
       user_id: user.id,
-      name: body.name,
-      city: body.city,
-      max_price: body.max_price,
-      min_score: body.min_score,
-      max_pages: body.max_pages ?? 3,
-      alert_enabled: body.alert_enabled ?? false,
-      alert_frequency: body.alert_frequency ?? "daily",
+      ...body,
     })
     .select()
     .single();

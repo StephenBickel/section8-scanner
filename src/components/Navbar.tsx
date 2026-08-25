@@ -36,8 +36,8 @@ const NAV_LINKS = [
 export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, profile, setUser, setProfile, setLoading } = useAuthStore();
-  const { scanning, deals, progress } = useScanStore();
+  const { user, setUser, setProfile, setLoading } = useAuthStore();
+  const { scanning, deals } = useScanStore();
   const savedCount = useSavedDealsStore((s) => s.deals.length);
   const [mobileOpen, setMobileOpen] = useState(false);
 

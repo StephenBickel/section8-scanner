@@ -38,6 +38,32 @@ type ListingTypeFilter = "all" | "standard" | "auction" | "pre_foreclosure" | "f
 
 type SortKey = "score" | "price" | "dscr" | "monthly_cash_flow" | "coc_return";
 
+function SortHeader({
+  label,
+  field,
+  sortKey,
+  sortAsc,
+  onSort,
+  className,
+}: {
+  label: string;
+  field: SortKey;
+  sortKey: SortKey;
+  sortAsc: boolean;
+  onSort: (field: SortKey) => void;
+  className?: string;
+}) {
+  return (
+    <th
+      onClick={() => onSort(field)}
+      className={`px-4 py-3 text-left text-[11px] uppercase tracking-wider text-[#777] bg-[#1a1a1a] cursor-pointer hover:text-[#00ff88] whitespace-nowrap select-none ${className || ""}`}
+    >
+      {label}
+      {sortKey === field && <span className="ml-1">{sortAsc ? "▲" : "▼"}</span>}
+    </th>
+  );
+}
+
 function formatCurrency(n: number): string {
   return "$" + Math.round(n).toLocaleString();
 }
@@ -108,7 +134,7 @@ export default function Home() {
   const [outreachDeal, setOutreachDeal] = useState<Deal | null>(null);
   const [neighborhoodCache, setNeighborhoodCache] = useState<Record<string, { crime_grade: string; crime_score: number }>>({});
 
-  const { user, profile } = useAuthStore();
+  const { user } = useAuthStore();
   const { addDeal: saveDeal, removeDeal: unsaveDeal, isDealSaved } = useSavedDealsStore();
 
   // Export handlers
@@ -251,18 +277,6 @@ export default function Home() {
     deals.length > 0
       ? (deals.reduce((s, d) => s + d.dscr, 0) / deals.length).toFixed(2)
       : "—";
-
-  const SortHeader = ({ label, field, className }: { label: string; field: SortKey; className?: string }) => (
-    <th
-      onClick={() => handleSort(field)}
-      className={`px-4 py-3 text-left text-[11px] uppercase tracking-wider text-[#777] bg-[#1a1a1a] cursor-pointer hover:text-[#00ff88] whitespace-nowrap select-none ${className || ""}`}
-    >
-      {label}
-      {sortKey === field && (
-        <span className="ml-1">{sortAsc ? "▲" : "▼"}</span>
-      )}
-    </th>
-  );
 
   return (
     <div className="flex flex-col md:flex-row h-full md:overflow-hidden overflow-y-auto">
@@ -715,17 +729,17 @@ export default function Home() {
                       <th className="px-4 py-3 text-left text-[11px] uppercase tracking-wider text-[#777] bg-[#1a1a1a]">
                         Address
                       </th>
-                      <SortHeader label="Price" field="price" />
+                      <SortHeader label="Price" field="price" sortKey={sortKey} sortAsc={sortAsc} onSort={handleSort} />
                       <th className="px-4 py-3 text-left text-[11px] uppercase tracking-wider text-[#777] bg-[#1a1a1a]">
                         Beds
                       </th>
                       <th className="px-4 py-3 text-left text-[11px] uppercase tracking-wider text-[#777] bg-[#1a1a1a]">
                         HUD Payment Standard
                       </th>
-                      <SortHeader label="DSCR" field="dscr" />
-                      <SortHeader label="Cash Flow" field="monthly_cash_flow" />
-                      <SortHeader label="CoC%" field="coc_return" />
-                      <SortHeader label="Score" field="score" />
+                      <SortHeader label="DSCR" field="dscr" sortKey={sortKey} sortAsc={sortAsc} onSort={handleSort} />
+                      <SortHeader label="Cash Flow" field="monthly_cash_flow" sortKey={sortKey} sortAsc={sortAsc} onSort={handleSort} />
+                      <SortHeader label="CoC%" field="coc_return" sortKey={sortKey} sortAsc={sortAsc} onSort={handleSort} />
+                      <SortHeader label="Score" field="score" sortKey={sortKey} sortAsc={sortAsc} onSort={handleSort} />
                     </tr>
                   </thead>
                   <tbody>
@@ -741,7 +755,6 @@ export default function Home() {
                         onAddToPortfolio={() => handleAddToPortfolio(deal)}
                         onContactSeller={() => setOutreachDeal(deal)}
                         showPortfolioBtn={!!user}
-                        isInvestor={true}
                         crimeGrade={neighborhoodCache[deal.zip_code]?.crime_grade}
                         onExpand={() => fetchNeighborhood(deal.zip_code)}
                         citySlug={city}
@@ -1053,7 +1066,6 @@ function DealRow({
   onAddToPortfolio,
   onContactSeller,
   showPortfolioBtn,
-  isInvestor,
   crimeGrade,
   onExpand,
   citySlug,
@@ -1067,7 +1079,6 @@ function DealRow({
   onAddToPortfolio: () => void;
   onContactSeller: () => void;
   showPortfolioBtn: boolean;
-  isInvestor?: boolean;
   crimeGrade?: string;
   onExpand?: () => void;
   citySlug: string;

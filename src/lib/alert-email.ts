@@ -1,3 +1,5 @@
+import { safeZillowUrl } from "./security/scanner-url";
+
 interface AlertDeal {
   address: string;
   price: number;
@@ -15,6 +17,27 @@ interface AlertEmailOptions {
   alertType: "instant" | "daily" | "weekly";
   appUrl: string;
   unsubscribeUrl: string;
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  })[character] ?? character);
+}
+
+function safeAppUrl(value: string): string | null {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" && !(url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]", "::1"].includes(url.hostname))) return null;
+    if (url.username || url.password) return null;
+    return escapeHtml(url.toString());
+  } catch {
+    return null;
+  }
 }
 
 function formatCurrency(n: number): string {
@@ -38,11 +61,12 @@ function scoreGrade(score: number): string {
 
 function dealCardHtml(deal: AlertDeal): string {
   const cashFlowColor = deal.monthly_cash_flow >= 0 ? "#00ff88" : "#ff4444";
+  const zillowUrl = safeZillowUrl(deal.zillow_url);
   return `
     <div style="background:#111;border:1px solid #222;border-radius:8px;padding:20px;margin-bottom:12px;">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
         <div>
-          <div style="color:#e0e0e0;font-size:15px;font-weight:600;margin-bottom:4px;">${deal.address}</div>
+          <div style="color:#e0e0e0;font-size:15px;font-weight:600;margin-bottom:4px;">${escapeHtml(deal.address)}</div>
           <div style="color:#777;font-size:12px;">${deal.beds}bd / ${deal.baths}ba</div>
         </div>
         <div style="background:rgba(0,0,0,0.3);border:1px solid ${scoreColor(deal.deal_score)};border-radius:6px;padding:4px 10px;text-align:center;">
@@ -64,7 +88,7 @@ function dealCardHtml(deal: AlertDeal): string {
           <td style="padding:6px 0;color:#00ff88;font-size:13px;font-weight:600;text-align:right;font-family:'JetBrains Mono',monospace;">${formatCurrency(deal.hud_rent)}/mo</td>
         </tr>` : ""}
       </table>
-      ${deal.zillow_url ? `<a href="${deal.zillow_url}" style="display:inline-block;margin-top:12px;color:#00ff88;font-size:12px;text-decoration:none;border-bottom:1px solid rgba(0,255,136,0.3);">View on Zillow &rarr;</a>` : ""}
+      ${zillowUrl ? `<a href="${escapeHtml(zillowUrl)}" style="display:inline-block;margin-top:12px;color:#00ff88;font-size:12px;text-decoration:none;border-bottom:1px solid rgba(0,255,136,0.3);">View on Zillow &rarr;</a>` : ""}
     </div>
   `;
 }
@@ -80,6 +104,8 @@ export function generateAlertEmailHtml(options: AlertEmailOptions): string {
 
   const title = subjectMap[alertType];
   const dealCards = deals.map(dealCardHtml).join("");
+  const safeApp = safeAppUrl(appUrl);
+  const safeUnsubscribe = safeAppUrl(unsubscribeUrl);
 
   return `
 <!DOCTYPE html>
@@ -98,7 +124,7 @@ export function generateAlertEmailHtml(options: AlertEmailOptions): string {
         <span style="color:white;font-size:14px;font-weight:700;letter-spacing:-0.5px;">Section 8 Scanner</span>
       </div>
       <h1 style="color:white;font-size:22px;font-weight:700;margin:0 0 6px 0;">${title}</h1>
-      <p style="color:#777;font-size:13px;margin:0;">Hey ${userName}, we found ${deals.length} deal${deals.length > 1 ? "s" : ""} matching your criteria.</p>
+      <p style="color:#777;font-size:13px;margin:0;">Hey ${escapeHtml(userName)}, we found ${deals.length} deal${deals.length > 1 ? "s" : ""} matching your criteria.</p>
     </div>
 
     <!-- Deal Cards -->
@@ -106,16 +132,16 @@ export function generateAlertEmailHtml(options: AlertEmailOptions): string {
 
     <!-- CTA -->
     <div style="text-align:center;margin:28px 0;">
-      <a href="${appUrl}" style="display:inline-block;background:#00ff88;color:#000;font-size:13px;font-weight:700;text-decoration:none;padding:12px 32px;border-radius:8px;text-transform:uppercase;letter-spacing:0.5px;">
+      ${safeApp ? `<a href="${safeApp}" style="display:inline-block;background:#00ff88;color:#000;font-size:13px;font-weight:700;text-decoration:none;padding:12px 32px;border-radius:8px;text-transform:uppercase;letter-spacing:0.5px;">
         View Deal${deals.length > 1 ? "s" : ""} &rarr;
-      </a>
+      </a>` : ""}
     </div>
 
     <!-- Footer -->
     <div style="border-top:1px solid #222;padding-top:20px;margin-top:20px;">
       <p style="color:#555;font-size:11px;margin:0;">
         You received this because you have alerts enabled on Section 8 Scanner.
-        <a href="${unsubscribeUrl}" style="color:#555;text-decoration:underline;">Unsubscribe</a>
+        ${safeUnsubscribe ? `<a href="${safeUnsubscribe}" style="color:#555;text-decoration:underline;">Unsubscribe</a>` : ""}
       </p>
     </div>
   </div>

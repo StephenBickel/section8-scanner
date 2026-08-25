@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 // AuthGuard removed — internal tool
 import { createClient } from "@/lib/supabase/client";
 import { useAuthStore } from "@/stores/auth";
@@ -27,31 +27,20 @@ function SettingsContent() {
   const [notifyPriceDrops, setNotifyPriceDrops] = useState(true);
   const [notifyScoreChanges, setNotifyScoreChanges] = useState(false);
 
-  useEffect(() => {
-    if (profile) {
-      setFullName(profile.full_name ?? "");
-    }
-  }, [profile]);
-
-  useEffect(() => {
-    if (user) {
-      loadAlertPrefs();
-    }
-  }, [user]);
-
-  async function loadAlertPrefs() {
+  const loadAlertPrefs = useCallback(async () => {
+    if (!user) return;
     const supabase = createClient();
     const { data } = await supabase
       .from("alert_preferences")
       .select("*")
-      .eq("user_id", user!.id)
+      .eq("user_id", user.id)
       .single();
 
     if (data) {
       const prefs = data as AlertPreferences;
       setAlertPrefs(prefs);
       setEmailEnabled(prefs.email_enabled);
-      setAlertEmail(prefs.email_address ?? user?.email ?? "");
+      setAlertEmail(prefs.email_address ?? user.email ?? "");
       setDigestFrequency(prefs.digest_frequency);
       setMinDealScore(prefs.min_deal_score);
       setPriceDropThreshold(prefs.price_drop_threshold);
@@ -59,10 +48,24 @@ function SettingsContent() {
       setNotifyPriceDrops(prefs.notify_price_drops);
       setNotifyScoreChanges(prefs.notify_score_changes);
     } else {
-      setAlertEmail(user?.email ?? "");
+      setAlertEmail(user.email ?? "");
     }
     setAlertLoading(false);
-  }
+  }, [user]);
+
+  useEffect(() => {
+    if (profile) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate editable form state when the profile arrives
+      setFullName(profile.full_name ?? "");
+    }
+  }, [profile]);
+
+  useEffect(() => {
+    if (user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronize initial UI state with remote data
+      void loadAlertPrefs();
+    }
+  }, [user, loadAlertPrefs]);
 
   const handleSave = async () => {
     if (!user) return;

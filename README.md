@@ -1,32 +1,154 @@
 # Section 8 Scanner
 
-Web app for finding Section 8 real estate investment deals. Scans Zillow for properties, scores them against HUD Fair Market Rents, and streams results in real-time.
+A self-hostable real-estate analysis app for comparing listings with HUD Fair
+Market Rents, ranking potential deals, saving searches, managing a portfolio,
+and organizing seller outreach.
 
-## Quick Start
+The repository starts in `demo` scanner mode, so anyone can run the UI without
+scraping credentials or a Python provider. Live scans are opt-in and protected
+by user authentication, bounded inputs, concurrency limits, and a server-only
+API key.
+
+## Stack
+
+- Next.js 16, React 19, TypeScript, and Tailwind CSS
+- Supabase Auth and PostgreSQL with Row Level Security
+- Server-Sent Events for progressive scan results
+- Optional FastAPI service for a live Python scanner
+- Optional Stripe and Resend integrations
+
+## Quick start
+
+Requirements: Node.js 20+ and a Supabase project.
 
 ```bash
-# Set your HUD API token
-export HUD_API_TOKEN="your-token"
+git clone https://github.com/StephenBickel/section8-scanner.git
+cd section8-scanner
+npm install
+cp .env.example .env.local
+```
 
-# Start the dev server
+In your Supabase SQL editor, run these files in order for a new installation:
+
+1. `schema.sql`
+2. `schema_phase2.sql`
+3. `schema_phase3.sql`
+4. `schema_tenant_finder.sql`
+
+Set your own project values in `.env.local`:
+
+```dotenv
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+SCANNER_MODE=demo
+```
+
+Then start the app:
+
+```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3000](http://localhost:3000). The demo scanner is public,
+small, and deterministic; it never starts a scraper subprocess.
 
-### Access via Tailscale
+## Scanner modes
 
-If running on a Tailscale node, access at `http://<tailscale-hostname>:3000`.
+`SCANNER_MODE` has three explicit values:
 
-## Architecture
+- `demo` (default): streams bundled sample results and needs no scanner backend.
+- `local`: authenticated requests run `scanner.py` on the Next.js host.
+- `remote`: authenticated requests proxy to the protected FastAPI service.
 
-- **Next.js 14** App Router + TypeScript + Tailwind CSS
-- **SSE API route** (`/api/scan`) spawns `scanner.py` as a subprocess
-- **scanner.py** uses modules from `~/Projects/section8-finder/` (zillow.py, hud.py, scorer.py)
-- Python runtime: `~/Projects/section8-finder/venv/bin/python3` or `~/.local/pipx/venvs/scrapling/bin/python3`
+Live mode does not silently fall back to another mode. A bad or missing live
+configuration returns an error, which avoids accidentally exposing a local
+process or presenting sample data as a real scan.
 
-## Requirements
+### Local live scanner
 
-- Node.js 18+
-- Python 3.10+ with Scrapling installed
-- `HUD_API_TOKEN` environment variable (register at https://www.huduser.gov/hudapi/public/register)
+The adapter in `scanner.py` expects a provider directory containing compatible
+`zillow.py`, `hud.py`, `scorer.py`, and `config.py` modules. Configure its path
+instead of editing source code:
+
+```dotenv
+SCANNER_MODE=local
+SCANNER_PYTHON=/absolute/path/to/python
+SCANNER_MODULE_PATH=/absolute/path/to/scanner-provider
+HUD_API_TOKEN=your-token
+```
+
+The provider integration is optional and is not included in this repository.
+Check the data source's terms and applicable law before enabling automated
+collection.
+
+### Remote live scanner
+
+Install and start the API:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+export SCANNER_API_KEY="$(openssl rand -hex 32)"
+export SCANNER_MODULE_PATH=/absolute/path/to/scanner-provider
+uvicorn api_server:app --host 127.0.0.1 --port 8100
+```
+
+Configure the web app with the same key:
+
+```dotenv
+SCANNER_MODE=remote
+SCANNER_API_URL=https://scanner.example.com
+SCANNER_API_KEY=the-same-long-random-secret
+```
+
+For a temporary Cloudflare tunnel, install `cloudflared`, export the required
+variables, and run `scripts/start-tunnel.sh`. The script prints the URL; it does
+not read shell startup files or mutate a specific Vercel project.
+
+## Existing Supabase projects
+
+Apply the SQL files in `migrations/` in filename order before making an existing
+deployment public. They remove the old global seller-contact policy, restrict
+profile updates, add bounded saved-search criteria, and install the atomic scan
+quota used by live scanner modes.
+
+Legacy seller contacts cannot be assigned safely by an automated migration.
+They remain hidden until an administrator sets each row's correct `user_id`.
+After backfilling all rows, set `seller_contacts.user_id` to `NOT NULL`. The
+migration does this automatically when no unowned legacy rows remain.
+
+## Environment and secrets
+
+Copy `.env.example` and replace placeholders with values from your own services.
+Only the Supabase URL and anon key use `NEXT_PUBLIC_`; all other credentials are
+server-only. Never commit `.env.local`, a Supabase service-role key, Stripe
+secret, Resend key, cron key, or scanner API key.
+
+If a real credential has ever been committed, deleting it from the latest file
+is not enough: rotate or revoke it before publishing because Git history retains
+old versions.
+
+## Verification
+
+```bash
+npm test
+npm run build
+npm run lint
+npm audit
+```
+
+The security regression tests cover redirect validation, scanner bounds and
+authentication, contact ownership, profile column privileges, and repository
+secret hygiene.
+
+## Responsible use
+
+Seller contact data is personal information. Operators are responsible for
+privacy, marketing, fair-housing, scraping, and retention rules that apply to
+their deployment. This software provides analysis tooling, not legal,
+investment, or housing advice.
+
+## License
+
+[MIT](LICENSE)

@@ -5,8 +5,6 @@ import { FileText, Plus, ChevronDown, Lock } from "lucide-react";
 // AuthGuard removed — internal tool, no auth gating
 import ReportViewer from "@/components/ReportViewer";
 import { createClient } from "@/lib/supabase/client";
-import { useAuthStore } from "@/stores/auth";
-import { PLAN_LIMITS } from "@/lib/types";
 import type { DealReport, SavedSearch, Deal } from "@/lib/types";
 
 function formatDate(dateStr: string): string {
@@ -20,8 +18,6 @@ function formatDate(dateStr: string): string {
 }
 
 function ReportsContent() {
-  const { profile } = useAuthStore();
-  const plan = (profile?.plan ?? "free") as keyof typeof PLAN_LIMITS;
   const canUseReports = true; // Internal tool — no plan gating
 
   const [reports, setReports] = useState<DealReport[]>([]);

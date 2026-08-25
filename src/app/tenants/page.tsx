@@ -106,12 +106,14 @@ function TenantsContent() {
   }, []);
 
   useEffect(() => {
-    loadPhas();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronize initial UI state with remote data
+    void loadPhas();
   }, [loadPhas]);
 
   useEffect(() => {
-    if (tab === "listings") loadListings();
-    if (tab === "applications") loadApplications();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronize tab UI with remote data
+    if (tab === "listings") void loadListings();
+    if (tab === "applications") void loadApplications();
   }, [tab, loadListings, loadApplications]);
 
   async function copyToClipboard(text: string, id: string) {

@@ -3,17 +3,17 @@
 ## Architecture
 - **Frontend:** Next.js 16 on Vercel (App Router, Tailwind CSS v4, TypeScript)
 - **Backend:** FastAPI on Mac mini (Python + Scrapling for Zillow scraping)
-- **Database:** Supabase (`heocvgxhgmludycstedj`)
+- **Database:** Supabase (`your-project-ref`)
 - **Auth:** Supabase Auth (email/password + magic link)
 - **Payments:** Stripe (Free / Pro $29/mo / Investor $79/mo)
 - **Email:** Resend (alerts, reports)
 - **Hosting:** Vercel (frontend) + Mac mini via Cloudflare Tunnel (scanner API)
 
 ## Supabase Details
-- **Ref:** `heocvgxhgmludycstedj`
-- **URL:** `https://heocvgxhgmludycstedj.supabase.co`
-- **Anon Key:** `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhlb2N2Z3hoZ21sdWR5Y3N0ZWRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxMTg5NjUsImV4cCI6MjA4ODY5NDk2NX0.U33nbsyLudPHme0X5ZWeVoxu1UkgsJfpjUZmrOqKe2Q`
-- **Service Role Key:** `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhlb2N2Z3hoZ21sdWR5Y3N0ZWRqIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MzExODk2NSwiZXhwIjoyMDg4Njk0OTY1fQ.ycS5Ag25Wu5LcZAw8W9LikNQ-jSnRIHyJ8MAY5wjOeg`
+- **Ref:** `your-project-ref`
+- **URL:** `https://your-project-ref.supabase.co`
+- **Anon Key:** `YOUR_SUPABASE_KEY`
+- **Service Role Key:** `YOUR_SUPABASE_KEY`
 
 ## Design System (MUST MATCH EXISTING)
 - **Background:** `#0a0a0a` (bg), `#111` (surface), `#1a1a1a` (surface2)

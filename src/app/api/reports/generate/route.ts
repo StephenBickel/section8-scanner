@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import { PLAN_LIMITS } from "@/lib/types";
 import { getStaticNeighborhoodData } from "@/lib/neighborhood";
 
 function getSupabase(request: NextRequest) {
@@ -34,21 +33,6 @@ export async function POST(request: NextRequest) {
   } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  // Check plan
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("plan")
-    .eq("id", user.id)
-    .single();
-
-  const plan = (profile?.plan ?? "free") as keyof typeof PLAN_LIMITS;
-  if (false) { // Internal tool — no plan gating
-    return NextResponse.json(
-      { error: "Reports require a Pro or Investor plan" },
-      { status: 403 },
-    );
   }
 
   const body = await request.json();

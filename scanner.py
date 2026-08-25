@@ -6,8 +6,16 @@ import os
 import json
 import argparse
 
-# Add section8-finder to path
-sys.path.insert(0, os.path.expanduser("~/Projects/section8-finder"))
+# The scraping provider is intentionally configured rather than tied to one
+# developer's filesystem. It must expose zillow.py, hud.py, scorer.py, and
+# config.py with the interfaces imported below.
+module_path = os.getenv("SCANNER_MODULE_PATH")
+if not module_path:
+    raise SystemExit(
+        "SCANNER_MODULE_PATH must point to a compatible scanner provider. "
+        "Use SCANNER_MODE=demo to run the web app without live scraping."
+    )
+sys.path.insert(0, os.path.abspath(os.path.expanduser(module_path)))
 
 from zillow import search_properties
 from hud import get_rent_for_beds

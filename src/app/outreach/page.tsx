@@ -10,14 +10,12 @@ import {
   Send,
   Eye,
   MessageSquare,
-  AlertTriangle,
   X,
   Users,
   BarChart3,
 } from "lucide-react";
 // AuthGuard removed — internal tool, no auth gating
 import { createClient } from "@/lib/supabase/client";
-import { useAuthStore } from "@/stores/auth";
 import { DEFAULT_TEMPLATES } from "@/lib/email-templates";
 import type { OutreachCampaign, OutreachEmail, SellerContact } from "@/lib/types";
 
@@ -64,7 +62,6 @@ function campaignStatusBadge(status: string): string {
 type Tab = "campaigns" | "contacts" | "emails";
 
 function OutreachContent() {
-  const { profile } = useAuthStore();
   const isInvestor = true; // Internal tool — no plan gating
 
   const [activeTab, setActiveTab] = useState<Tab>("campaigns");
@@ -101,7 +98,8 @@ function OutreachContent() {
   }, []);
 
   useEffect(() => {
-    if (isInvestor) loadData();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronize initial UI state with remote data
+    if (isInvestor) void loadData();
     else setLoading(false);
   }, [isInvestor, loadData]);
 

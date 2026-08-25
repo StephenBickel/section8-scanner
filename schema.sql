@@ -1,5 +1,5 @@
 -- Section 8 Scanner — Full Database Schema
--- Supabase project: heocvgxhgmludycstedj
+-- Run this schema in your own Supabase project.
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
@@ -25,11 +25,11 @@ CREATE TABLE profiles (
 CREATE TABLE saved_searches (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  name TEXT NOT NULL,
-  city TEXT NOT NULL,
-  max_price INT NOT NULL DEFAULT 100000,
-  min_score FLOAT NOT NULL DEFAULT 40,
-  max_pages INT NOT NULL DEFAULT 3,
+  name TEXT NOT NULL CHECK (char_length(btrim(name)) BETWEEN 1 AND 100),
+  city TEXT NOT NULL CHECK (char_length(city) <= 80 AND city ~ '^[a-z0-9]+(-[a-z0-9]+)*$'),
+  max_price INT NOT NULL DEFAULT 100000 CHECK (max_price BETWEEN 1 AND 5000000),
+  min_score FLOAT NOT NULL DEFAULT 40 CHECK (min_score BETWEEN 0 AND 100),
+  max_pages INT NOT NULL DEFAULT 3 CHECK (max_pages BETWEEN 1 AND 10),
   alert_enabled BOOLEAN NOT NULL DEFAULT false,
   alert_frequency TEXT DEFAULT 'daily' CHECK (alert_frequency IN ('instant', 'daily', 'weekly')),
   alert_email BOOLEAN NOT NULL DEFAULT true,
@@ -85,7 +85,7 @@ CREATE TABLE alerts (
   deal_id UUID REFERENCES deals(id) ON DELETE SET NULL,
   alert_type TEXT NOT NULL CHECK (alert_type IN ('new_deal', 'price_drop', 'score_change')),
   channel TEXT NOT NULL DEFAULT 'email' CHECK (channel IN ('email', 'sms', 'push')),
-  sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  sent_at TIMESTAMPTZ,
   metadata JSONB DEFAULT '{}'::jsonb
 );
 
@@ -181,8 +181,13 @@ ALTER TABLE scan_runs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE deals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fmr_history ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY profiles_select ON profiles FOR SELECT USING (auth.uid() = id);
-CREATE POLICY profiles_update ON profiles FOR UPDATE USING (auth.uid() = id);
+CREATE POLICY profiles_select ON profiles FOR SELECT TO authenticated USING (auth.uid() = id);
+CREATE POLICY profiles_update ON profiles FOR UPDATE TO authenticated
+  USING (auth.uid() = id)
+  WITH CHECK (auth.uid() = id);
+REVOKE ALL ON TABLE profiles FROM anon, authenticated;
+GRANT SELECT ON TABLE profiles TO authenticated;
+GRANT UPDATE (full_name, updated_at) ON TABLE profiles TO authenticated;
 CREATE POLICY searches_all ON saved_searches FOR ALL USING (auth.uid() = user_id);
 CREATE POLICY alerts_select ON alerts FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY portfolio_all ON portfolio_properties FOR ALL USING (auth.uid() = user_id);
@@ -198,11 +203,13 @@ CREATE POLICY scans_insert ON scan_runs FOR INSERT WITH CHECK (auth.uid() = user
 CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO profiles (id, email, full_name)
+  INSERT INTO public.profiles (id, email, full_name)
   VALUES (NEW.id, NEW.email, NEW.raw_user_meta_data ->> 'full_name');
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
+
+REVOKE ALL ON FUNCTION public.handle_new_user() FROM PUBLIC, anon, authenticated;
 
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
@@ -211,8 +218,50 @@ CREATE TRIGGER on_auth_user_created
 CREATE OR REPLACE FUNCTION reset_daily_scans()
 RETURNS void AS $$
 BEGIN
-  UPDATE profiles
+  UPDATE public.profiles
   SET daily_scans_used = 0, daily_scans_reset_at = NOW()
   WHERE daily_scans_reset_at < NOW() - INTERVAL '24 hours';
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
+
+ALTER FUNCTION public.reset_daily_scans() SET search_path = '';
+REVOKE ALL ON FUNCTION public.reset_daily_scans() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.reset_daily_scans() TO service_role;
+
+CREATE OR REPLACE FUNCTION consume_scan_allowance()
+RETURNS boolean AS $$
+DECLARE
+  current_profile public.profiles%ROWTYPE;
+  daily_limit integer;
+BEGIN
+  IF auth.uid() IS NULL THEN RETURN false; END IF;
+
+  SELECT * INTO current_profile
+  FROM public.profiles
+  WHERE id = auth.uid()
+  FOR UPDATE;
+  IF NOT FOUND THEN RETURN false; END IF;
+
+  daily_limit := CASE current_profile.plan
+    WHEN 'investor' THEN 200
+    WHEN 'pro' THEN 50
+    ELSE 3
+  END;
+
+  IF current_profile.daily_scans_reset_at < NOW() - INTERVAL '24 hours' THEN
+    UPDATE public.profiles
+    SET daily_scans_used = 1, daily_scans_reset_at = NOW()
+    WHERE id = auth.uid();
+    RETURN true;
+  END IF;
+
+  IF current_profile.daily_scans_used >= daily_limit THEN RETURN false; END IF;
+  UPDATE public.profiles
+  SET daily_scans_used = daily_scans_used + 1
+  WHERE id = auth.uid();
+  RETURN true;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
+
+REVOKE ALL ON FUNCTION public.consume_scan_allowance() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.consume_scan_allowance() TO authenticated;

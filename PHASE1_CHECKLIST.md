@@ -67,7 +67,7 @@ export const STRIPE_PRICE_IDS = {
 
 ### 1. Start the app
 ```bash
-cd ~/Projects/section8-app
+cd <path-to-section8-scanner>
 npm run dev
 # App runs on http://localhost:3000
 ```
@@ -88,14 +88,14 @@ npm run dev
 ## 📦 Deploy to Vercel
 
 ```bash
-cd ~/Projects/section8-app
+cd <path-to-section8-scanner>
 git push origin main
 vercel deploy
 ```
 
 Before deploying, set Vercel environment variables:
 ```
-NEXT_PUBLIC_SUPABASE_URL=https://heocvgxhgmludycstedj.supabase.co
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=...
 STRIPE_SECRET_KEY=...

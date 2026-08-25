@@ -5,7 +5,7 @@ import { Plus, Building2, DollarSign, TrendingUp, X, Settings, ChevronDown, Chev
 // AuthGuard removed — internal tool
 import SavingsCalculator from "@/components/SavingsCalculator";
 import { createClient } from "@/lib/supabase/client";
-import type { PortfolioProperty, ManagementExpense } from "@/lib/types";
+import type { PortfolioProperty } from "@/lib/types";
 import {
   ResponsiveContainer,
   BarChart,
@@ -393,7 +393,8 @@ function PortfolioContent() {
   }, []);
 
   useEffect(() => {
-    loadProperties();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronize initial UI state with remote data
+    void loadProperties();
   }, [loadProperties]);
 
   const totalValue = properties.reduce((s, p) => s + p.purchase_price, 0);
@@ -471,7 +472,7 @@ function PortfolioContent() {
             Monthly Rent by Property
           </h3>
           <div className="h-48">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
               <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#222" />
                 <XAxis
