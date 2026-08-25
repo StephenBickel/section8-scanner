@@ -472,7 +472,7 @@ function PortfolioContent() {
             Monthly Rent by Property
           </h3>
           <div className="h-48">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} initialDimension={{ width: 600, height: 220 }}>
               <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#222" />
                 <XAxis

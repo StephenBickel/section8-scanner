@@ -114,7 +114,7 @@ export default function FMRTrendChart({ zipCode, compact = false }: FMRTrendChar
           </span>
         </div>
       )}
-      <ResponsiveContainer width="100%" height={height} minWidth={0} minHeight={0}>
+      <ResponsiveContainer width="100%" height={height} minWidth={0} minHeight={0} initialDimension={{ width: 600, height }}>
         <LineChart data={chartData} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
           <XAxis
             dataKey="year"

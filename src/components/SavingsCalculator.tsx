@@ -117,7 +117,7 @@ export default function SavingsCalculator({ compact = false }: SavingsCalculator
 
       {/* Chart */}
       <div className="h-36">
-        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} initialDimension={{ width: 600, height: 220 }}>
           <BarChart data={chartData} layout="vertical">
             <CartesianGrid strokeDasharray="3 3" stroke="#222" />
             <XAxis
