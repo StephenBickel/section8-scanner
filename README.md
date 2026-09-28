@@ -34,6 +34,7 @@ In your Supabase SQL editor, run these files in order for a new installation:
 2. `schema_phase2.sql`
 3. `schema_phase3.sql`
 4. `schema_tenant_finder.sql`
+5. `supabase/migrations/20260928023816_guided_property_analyses.sql`
 
 Set your own project values in `.env.local`:
 
@@ -51,6 +52,44 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000). The demo scanner is public,
 small, and deterministic; it never starts a scraper subprocess.
+
+## Guided property analysis
+
+Open **Analyze** to enter a property manually, or choose **Analyze property**
+from a scanner result. The worksheet uses one financial model for purchase
+financing, cash repairs, closing/holding costs, initial reserves, vacancy,
+operating expenses, and capital reserves. Percentages use 0–100 units; percentage
+expenses use scheduled rent. Cash-on-cash includes all initial cash, and debt
+coverage is NOI divided by debt service. Results are projections before income
+taxes; defaults are explicitly unverified assumptions.
+
+The worksheet includes a downside case (10% lower rent and up to five additional
+vacancy percentage points), a five-item evidence checklist, decision notes,
+and exact JSON/CSV exports. Editing a related assumption reopens its diligence
+task while retaining the user's evidence notes. Source/demo labels remain in
+the saved snapshot and export.
+
+Signed-in users can save immutable snapshots and compare up to three on
+**Saved**. Further edits create a new snapshot instead of overwriting earlier
+work. Older browser bookmarks remain separately labeled and are not silently
+imported into an account. Starting sign-in from the worksheet creates an explicit
+browser-local draft handoff valid for 30 minutes, including across tabs. It is
+removed after saving; expired handoffs are removed when accessed or when starting
+another handoff.
+
+Account saves require the additive `guided_property_analyses` migration above
+and `SUPABASE_SERVICE_ROLE_KEY` on the server. Apply that migration to an existing
+project after the older migrations described below. Do not rerun the base schema
+on an existing project. The new table permits owner reads/deletes, with calculated
+writes restricted to the server. Its atomic save function caps storage at 200
+snapshots per account and makes identical save retries idempotent. This is a
+storage bound, not a paid-plan definition. Without configuration, saving reports
+an error and leaves the editable worksheet and exports available.
+
+The shared domain code is in `src/lib/analysis/`; HTTP access is provided by
+`/api/analyses`. This is the foundation for future agent tools. MCP/OAuth account
+linking, live-provider recovery, and subscription checkout are still separate
+work; this feature does not implement them.
 
 ## Scanner modes
 
@@ -141,6 +180,13 @@ npm audit
 The security regression tests cover redirect validation, scanner bounds and
 authentication, contact ownership, profile column privileges, and repository
 secret hygiene.
+
+Analysis tests additionally cover an independently specified financial case,
+cash purchases, zero-interest loans, repair financing, missing/invalid inputs,
+downside scenarios, export provenance, and draft handoff expiry. Database tests
+execute the new migration in isolated PostgreSQL via the development-only PGlite
+dependency, checking owner isolation, write restrictions, immutable retries, and
+the account storage cap. They do not connect to a live Supabase project.
 
 ## Responsible use
 

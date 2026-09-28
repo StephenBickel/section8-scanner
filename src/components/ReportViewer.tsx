@@ -154,6 +154,7 @@ function SingleDealReport({ data }: { data: Record<string, unknown> }) {
         </div>
       </div>
 
+      {data.analysis ? <p className="text-xs text-amber-200">Default scenario with unverified assumptions. Use the property worksheet to edit and save your own case. Source freshness and approved rent are unknown.</p> : <p className="text-xs text-amber-200">Legacy report: calculations and source data may be outdated.</p>}
       {/* Financial Analysis */}
       <div>
         <div className="text-[10px] text-[#777] uppercase tracking-wider mb-3">Financial Analysis</div>
@@ -184,6 +185,7 @@ function SingleDealReport({ data }: { data: Record<string, unknown> }) {
               { label: "Management (10%)", value: Number(expenses.management ?? 0) },
               { label: "Maintenance (5%)", value: Number(expenses.maintenance ?? 0) },
               { label: "Vacancy (5%)", value: Number(expenses.vacancy ?? 0) },
+              { label: "Capital reserve (5%)", value: Number(expenses.capital_reserve ?? 0) },
             ].map((item) => (
               <div key={item.label} className="flex justify-between text-xs">
                 <span className="text-[#777]">{item.label}</span>

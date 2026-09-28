@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import SavedAnalyses from "@/components/SavedAnalyses";
 import { useState } from "react";
 import { BookmarkCheck, Download, Trash2, ExternalLink, StickyNote } from "lucide-react";
 import { useSavedDealsStore } from "@/stores/saved-deals";
@@ -34,7 +36,7 @@ const LISTING_TYPE_CONFIG: Record<string, { label: string; color: string; icon: 
   standard: { label: "Standard", color: "text-[#777] bg-[rgba(119,119,119,0.08)]", icon: "" },
 };
 
-export default function SavedDealsPage() {
+function LegacyBookmarks() {
   const { deals, removeDeal, updateNote, clearAll } = useSavedDealsStore();
   const [editingNote, setEditingNote] = useState<string | null>(null);
   const [noteText, setNoteText] = useState("");
@@ -58,7 +60,7 @@ export default function SavedDealsPage() {
     <div className="p-4 md:p-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-white mb-1">Saved Deals</h1>
+          <h1 className="text-xl font-bold text-white mb-1">Browser bookmarks</h1>
           <p className="text-sm text-[#777]">
             {deals.length} deal{deals.length !== 1 ? "s" : ""} saved · Stored locally in your browser
           </p>
@@ -119,7 +121,7 @@ export default function SavedDealsPage() {
               <p className={`text-lg font-bold font-[family-name:var(--font-mono)] ${cashFlowColor(totalCashFlow)}`}>+{formatCurrency(totalCashFlow)}/mo</p>
             </div>
             <div className="bg-[#111] border border-[#222] rounded-lg p-3">
-              <p className="text-[10px] uppercase tracking-wider text-[#555] mb-1">Annual Income</p>
+              <p className="text-[10px] uppercase tracking-wider text-[#555] mb-1">Projected annual cash flow</p>
               <p className="text-lg font-bold font-[family-name:var(--font-mono)] text-[#00ff88]">{formatCurrency(totalCashFlow * 12)}/yr</p>
             </div>
             <div className="bg-[#111] border border-[#222] rounded-lg p-3">
@@ -281,4 +283,12 @@ export default function SavedDealsPage() {
       )}
     </div>
   );
+}
+
+export default function SavedPage() {
+  return <main className="h-full overflow-y-auto"><div className="max-w-6xl mx-auto p-4 md:p-8 space-y-6">
+    <header className="flex flex-wrap items-center justify-between gap-4"><div><h1 className="text-2xl font-semibold">Saved analyses</h1><p className="text-sm text-[#aaa] mt-2">Your scenarios, assumptions, and decisions. Compare up to three snapshots.</p></div><Link className="rounded-lg bg-[#00ff88] px-4 py-2 text-black font-semibold text-sm" href="/analyze">Analyze a property</Link></header>
+    <SavedAnalyses />
+    <details className="border-t border-[#333] pt-5"><summary className="cursor-pointer text-sm text-[#aaa]">Older browser bookmarks</summary><p className="text-sm text-amber-200 mt-3">These belong to this browser, not a signed-in account. Older bookmarks may contain unverified or sample data and previous calculations. Review them in a new worksheet before relying on them.</p><LegacyBookmarks /></details>
+  </div></main>;
 }
