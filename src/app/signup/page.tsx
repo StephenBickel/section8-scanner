@@ -1,11 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { safeRedirectPath } from "@/lib/security/safe-redirect";
 import { createClient } from "@/lib/supabase/client";
 
-export default function SignupPage() {
+function SignupForm() {
+  const searchParams = useSearchParams();
+  const next = safeRedirectPath(searchParams.get("next"));
   const router = useRouter();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -31,7 +34,7 @@ export default function SignupPage() {
       password,
       options: {
         data: { full_name: fullName },
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
       },
     });
 
@@ -55,7 +58,7 @@ export default function SignupPage() {
             We sent a confirmation link to <span className="text-white">{email}</span>
           </p>
           <button
-            onClick={() => router.push("/login")}
+            onClick={() => router.push(`/login?next=${encodeURIComponent(next)}`)}
             className="mt-6 text-xs text-[#00ff88] hover:underline"
           >
             Back to login
@@ -75,11 +78,13 @@ export default function SignupPage() {
 
         <form onSubmit={handleSignup} className="space-y-4">
           <div>
-            <label className="block text-xs text-[#777] uppercase tracking-wider mb-1.5">
+            <label htmlFor="signup-fullName" className="block text-xs text-[#777] uppercase tracking-wider mb-1.5">
               Full Name
             </label>
             <input
               type="text"
+              id="signup-fullName"
+              autoComplete="name"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               required
@@ -89,11 +94,13 @@ export default function SignupPage() {
           </div>
 
           <div>
-            <label className="block text-xs text-[#777] uppercase tracking-wider mb-1.5">
+            <label htmlFor="signup-email" className="block text-xs text-[#777] uppercase tracking-wider mb-1.5">
               Email
             </label>
             <input
               type="email"
+              id="signup-email"
+              autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -103,11 +110,13 @@ export default function SignupPage() {
           </div>
 
           <div>
-            <label className="block text-xs text-[#777] uppercase tracking-wider mb-1.5">
+            <label htmlFor="signup-password" className="block text-xs text-[#777] uppercase tracking-wider mb-1.5">
               Password
             </label>
             <input
               type="password"
+              id="signup-password"
+              autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -134,11 +143,15 @@ export default function SignupPage() {
 
         <p className="mt-6 text-center text-xs text-[#555]">
           Already have an account?{" "}
-          <Link href="/login" className="text-[#00ff88] hover:underline">
+          <Link href={`/login?next=${encodeURIComponent(next)}`} className="text-[#00ff88] hover:underline">
             Sign in
           </Link>
         </p>
       </div>
     </div>
   );
+}
+
+export default function SignupPage() {
+  return <Suspense fallback={<p className="p-8">Loading…</p>}><SignupForm /></Suspense>;
 }

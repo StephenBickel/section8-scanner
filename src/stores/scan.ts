@@ -1,3 +1,4 @@
+import { normalizeFinancials } from "@/lib/analysis/legacy";
 import { create } from "zustand";
 import { safeZillowUrl } from "@/lib/security/scanner-url";
 
@@ -20,6 +21,7 @@ interface Deal {
   annual_cash_flow: number;
   rent_to_price: number;
   zip_code: string;
+  source_kind?: "demo" | "scanner";
   listing_type?: "standard" | "auction" | "pre_foreclosure" | "foreclosure" | "fsbo";
 }
 
@@ -149,7 +151,7 @@ export const useScanStore = create<ScanState>((set, get) => ({
 
             if (msg.type === "property") {
               const deal = msg.data as Deal;
-              set((s) => ({ deals: [...s.deals, { ...deal, zillow_url: safeZillowUrl(deal.zillow_url) ?? "" }] }));
+              set((s) => ({ deals: [...s.deals, normalizeFinancials({ ...deal, zillow_url: safeZillowUrl(deal.zillow_url) ?? "" })] }));
             } else if (msg.type === "progress") {
               set({
                 progress: {
@@ -163,6 +165,7 @@ export const useScanStore = create<ScanState>((set, get) => ({
                 scanStats: { total: msg.total, deals: msg.deals },
                 scanDone: true,
                 isDemo: !!msg.demo,
+                deals: get().deals.map(deal => ({ ...deal, source_kind: msg.demo ? "demo" : "scanner" })),
               });
             } else if (msg.type === "error") {
               set({ error: msg.message });

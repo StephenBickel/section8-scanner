@@ -15,12 +15,13 @@ export default function ExpenseBreakdown({ expenses, monthlyRent }: ExpenseBreak
   const cashFlow = monthlyRent - expenses.total;
 
   const items = [
-    { label: "Mortgage (DSCR 25% down, 7.5%)", value: expenses.mortgage },
+    { label: "Mortgage (assumed 25% down, 7.5%)", value: expenses.mortgage },
     { label: `Property Tax (${expenses.sources.tax})`, value: expenses.property_tax },
     { label: `Insurance (${expenses.sources.insurance})`, value: expenses.insurance },
     { label: "Management (10%)", value: expenses.management },
     { label: "Maintenance (5%)", value: expenses.maintenance },
-    { label: "Vacancy Reserve (5%)", value: expenses.vacancy },
+    { label: "Vacancy (5%)", value: expenses.vacancy },
+    { label: "Capital reserve (5%)", value: expenses.capital_reserve },
   ];
 
   return (

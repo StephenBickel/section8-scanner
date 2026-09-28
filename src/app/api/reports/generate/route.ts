@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import { getStaticNeighborhoodData } from "@/lib/neighborhood";
+import { evaluate, defaultInputs, newDraft } from "@/lib/analysis/model";
 
 function getSupabase(request: NextRequest) {
   const response = NextResponse.next();
@@ -64,55 +64,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Deal not found" }, { status: 404 });
     }
 
-    // Get real expenses
-    const state = extractState(String(deal.city ?? ""));
-    let expenses: Record<string, unknown> = {};
-
-    if (state) {
-      const { data: taxData } = await supabase
-        .from("county_tax_rates")
-        .select("*")
-        .eq("state", state)
-        .order("year", { ascending: false })
-        .limit(1)
-        .single();
-
-      const { data: insData } = await supabase
-        .from("insurance_estimates")
-        .select("*")
-        .eq("state", state)
-        .order("year", { ascending: false })
-        .limit(1)
-        .single();
-
-      const taxRate = taxData?.effective_tax_rate ?? 1.5;
-      const insMonthly = insData?.avg_monthly_premium ?? 120;
-      const price = Number(deal.price ?? 0);
-      const rent = Number(deal.monthly_rent ?? 0);
-
-      const loanAmount = price * 0.75;
-      const monthlyRate = 0.075 / 12;
-      const mortgage = loanAmount > 0
-        ? (loanAmount * monthlyRate * Math.pow(1 + monthlyRate, 360)) / (Math.pow(1 + monthlyRate, 360) - 1)
-        : 0;
-
-      expenses = {
-        mortgage: Math.round(mortgage),
-        property_tax: Math.round((price * (taxRate / 100)) / 12),
-        insurance: Math.round(insMonthly),
-        management: Math.round(rent * 0.1),
-        maintenance: Math.round(rent * 0.05),
-        vacancy: Math.round(rent * 0.05),
-        total: Math.round(mortgage + (price * (taxRate / 100)) / 12 + insMonthly + rent * 0.2),
-        tax_source: taxData ? `${taxData.county} Co. ${taxRate}%` : "Estimated 1.5%",
-        insurance_source: insData ? `${state} avg $${Math.round(insData.avg_annual_premium)}/yr` : "Estimated $120/mo",
-      };
+    const price = Number(deal.price);
+    const rent = Number(deal.monthly_rent);
+    if (!Number.isFinite(price) || price <= 0 || deal.monthly_rent == null || !Number.isFinite(rent) || rent < 0) {
+      return NextResponse.json({ error: "This property needs a valid price and rent assumption before generating a report." }, { status: 422 });
     }
-
-    // Get neighborhood data
-    const neighborhood = deal.zip_code
-      ? getStaticNeighborhoodData(String(deal.zip_code))
-      : null;
+    // Legacy reports start from the same explicit default case as discovery.
+    // A state alone cannot identify the property's county tax rate.
+    const draft = newDraft();
+    draft.property = { address: String(deal.address ?? "Property"), city: String(deal.city ?? ""), sourceKind: "scanner", sourceUrl: "", observedAt: null };
+    draft.inputs = defaultInputs(price, rent);
+    const analysis = evaluate(draft);
+    const expenses = {
+      mortgage: analysis.result.debtService, property_tax: draft.inputs.monthlyTaxes,
+      insurance: draft.inputs.monthlyInsurance, management: rent * 0.1,
+      maintenance: rent * 0.05, vacancy: rent * 0.05, capital_reserve: analysis.result.capitalReserve,
+      total: Math.round((rent - analysis.result.monthlyCashFlow) * 100) / 100,
+      tax_source: "Unverified 1.5% assumption", insurance_source: "Unverified $120/month assumption",
+    };
+    const normalizedDeal = { ...deal, monthly_cash_flow: analysis.result.monthlyCashFlow,
+      cash_on_cash: analysis.result.cashOnCashPercent, coc_return: analysis.result.cashOnCashPercent,
+      dscr: analysis.result.debtCoverage, initial_cash: analysis.result.initialCash };
 
     // Get FMR history
     let fmrHistory: unknown[] = [];
@@ -126,7 +98,7 @@ export async function POST(request: NextRequest) {
     }
 
     title = `Deal Report: ${String(deal.address ?? "Unknown")}`;
-    reportData = { deal, expenses, neighborhood, fmr_history: fmrHistory };
+    reportData = { deal: normalizedDeal, expenses, analysis, fmr_history: fmrHistory };
   } else if (type === "market_summary") {
     if (!saved_search_id) {
       return NextResponse.json({ error: "saved_search_id required" }, { status: 400 });
@@ -220,15 +192,4 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json(report, { status: 201 });
-}
-
-function extractState(city: string): string | null {
-  // Try to extract state abbreviation from city string like "Cleveland, OH" or "cleveland-oh"
-  const commaMatch = city.match(/,\s*([A-Z]{2})\s*$/i);
-  if (commaMatch) return commaMatch[1].toUpperCase();
-
-  const dashMatch = city.match(/-([a-z]{2})$/i);
-  if (dashMatch) return dashMatch[1].toUpperCase();
-
-  return null;
 }

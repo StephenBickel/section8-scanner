@@ -1,11 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { safeRedirectPath } from "@/lib/security/safe-redirect";
 import { createClient } from "@/lib/supabase/client";
 
-export default function LoginPage() {
+function LoginForm() {
+  const searchParams = useSearchParams();
+  const next = safeRedirectPath(searchParams.get("next"));
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -30,7 +33,7 @@ export default function LoginPage() {
       return;
     }
 
-    router.push("/dashboard");
+    router.push(next);
     router.refresh();
   };
 
@@ -45,7 +48,7 @@ export default function LoginPage() {
     const supabase = createClient();
     const { error: authError } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+      options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}` },
     });
 
     if (authError) {
@@ -88,11 +91,13 @@ export default function LoginPage() {
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
-            <label className="block text-xs text-[#777] uppercase tracking-wider mb-1.5">
+            <label htmlFor="login-email" className="block text-xs text-[#777] uppercase tracking-wider mb-1.5">
               Email
             </label>
             <input
               type="email"
+              id="login-email"
+              autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -102,11 +107,13 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label className="block text-xs text-[#777] uppercase tracking-wider mb-1.5">
+            <label htmlFor="login-password" className="block text-xs text-[#777] uppercase tracking-wider mb-1.5">
               Password
             </label>
             <input
               type="password"
+              id="login-password"
+              autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -146,11 +153,15 @@ export default function LoginPage() {
 
         <p className="mt-6 text-center text-xs text-[#555]">
           Don&apos;t have an account?{" "}
-          <Link href="/signup" className="text-[#00ff88] hover:underline">
+          <Link href={`/signup?next=${encodeURIComponent(next)}`} className="text-[#00ff88] hover:underline">
             Sign up
           </Link>
         </p>
       </div>
     </div>
   );
+}
+
+export default function LoginPage() {
+  return <Suspense fallback={<p className="p-8">Loading…</p>}><LoginForm /></Suspense>;
 }

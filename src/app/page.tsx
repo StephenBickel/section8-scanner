@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
-import { Bookmark, BookmarkCheck, Building2, Download, Mail, Shield, Gift, ExternalLink } from "lucide-react";
+import { useState } from "react";
+import { Bookmark, BookmarkCheck, Download, Gift, ExternalLink } from "lucide-react";
+import Link from "next/link";
+import { analysisUrl } from "@/lib/analysis/legacy";
 import CitySelector from "@/components/CitySelector";
-import CrimeGradeBadge from "@/components/CrimeGradeBadge";
 import OutreachModal from "@/components/OutreachModal";
 import { createClient } from "@/lib/supabase/client";
 import { useAuthStore } from "@/stores/auth";
@@ -31,6 +32,7 @@ interface Deal {
   annual_cash_flow: number;
   rent_to_price: number;
   zip_code: string;
+  initial_cash?: number;
   listing_type?: "standard" | "auction" | "pre_foreclosure" | "foreclosure" | "fsbo";
 }
 
@@ -132,7 +134,6 @@ export default function Home() {
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
   const [outreachDeal, setOutreachDeal] = useState<Deal | null>(null);
-  const [neighborhoodCache, setNeighborhoodCache] = useState<Record<string, { crime_grade: string; crime_score: number }>>({});
 
   const { user } = useAuthStore();
   const { addDeal: saveDeal, removeDeal: unsaveDeal, isDealSaved } = useSavedDealsStore();
@@ -154,26 +155,9 @@ export default function Home() {
     if (isDealSaved(deal.address)) {
       unsaveDeal(deal.address);
     } else {
-      saveDeal({ ...deal, city });
+      saveDeal({ ...deal, city, source_kind: isDemo ? "demo" : "scanner" });
     }
   };
-
-  // Fetch neighborhood data for deal zip codes
-  const fetchNeighborhood = useCallback(async (zipCode: string) => {
-    if (!zipCode || neighborhoodCache[zipCode]) return;
-    try {
-      const res = await fetch(`/api/neighborhood/${zipCode}`);
-      if (res.ok) {
-        const data = await res.json();
-        setNeighborhoodCache((prev) => ({
-          ...prev,
-          [zipCode]: { crime_grade: data.crime_grade, crime_score: data.crime_score },
-        }));
-      }
-    } catch {
-      // ignore
-    }
-  }, [neighborhoodCache]);
 
   const startScan = () => {
     setExpandedRow(null);
@@ -734,7 +718,7 @@ export default function Home() {
                         Beds
                       </th>
                       <th className="px-4 py-3 text-left text-[11px] uppercase tracking-wider text-[#777] bg-[#1a1a1a]">
-                        HUD Payment Standard
+                        Rent assumption
                       </th>
                       <SortHeader label="DSCR" field="dscr" sortKey={sortKey} sortAsc={sortAsc} onSort={handleSort} />
                       <SortHeader label="Cash Flow" field="monthly_cash_flow" sortKey={sortKey} sortAsc={sortAsc} onSort={handleSort} />
@@ -755,9 +739,8 @@ export default function Home() {
                         onAddToPortfolio={() => handleAddToPortfolio(deal)}
                         onContactSeller={() => setOutreachDeal(deal)}
                         showPortfolioBtn={!!user}
-                        crimeGrade={neighborhoodCache[deal.zip_code]?.crime_grade}
-                        onExpand={() => fetchNeighborhood(deal.zip_code)}
                         citySlug={city}
+                        isDemo={isDemo}
                         isSaved={isDealSaved(deal.address)}
                         onToggleSave={() => toggleSaveDeal(deal)}
                       />
@@ -783,6 +766,7 @@ export default function Home() {
                     </div>
                     <div className="flex items-center gap-1.5">
                       <button
+                        aria-label={`Bookmark ${deal.address} in this browser`}
                         onClick={() => toggleSaveDeal(deal)}
                         className={`p-1 rounded transition-colors ${isDealSaved(deal.address) ? "text-[#ffcc00]" : "text-[#555] hover:text-[#ffcc00]"}`}
                       >
@@ -807,16 +791,14 @@ export default function Home() {
                       </span>
                     </div>
                     <div>
-                      <span className="text-[#555] block">HUD Payment Std</span>
+                      <span className="text-[#555] block">Rent assumption</span>
                       <span className="font-bold font-[family-name:var(--font-mono)] text-[#00ff88]">
                         {formatCurrency(deal.hud_rent)}/mo
                       </span>
                     </div>
                   </div>
                   <div className="flex gap-2 mt-3 items-center">
-                    {neighborhoodCache[deal.zip_code] && (
-                      <CrimeGradeBadge grade={neighborhoodCache[deal.zip_code].crime_grade} />
-                    )}
+                    <Link className="text-sm text-[#00ff88]" href={analysisUrl(deal, city, isDemo)}>Analyze property →</Link>
                     {deal.zillow_url && (
                       <a
                         href={deal.zillow_url}
@@ -986,464 +968,30 @@ function GrantsSection({ citySlug }: { citySlug: string }) {
   );
 }
 
-// --- Rehab & All-In Cost Estimator ---
-const CLOSING_COST_PCT = 0.03;
-const HQS_BUFFER = 3000;
-const HOLDING_COST_MONTHLY = 1500;
-const DOWN_PAYMENT_PCT = 0.15;
-const INTEREST_RATE = 0.08;
-const LOAN_TERM_YEARS = 30;
-const PROPERTY_TAX_RATE = 0.015;
-const INSURANCE_MONTHLY = 100;
-const MGMT_FEE_PCT = 0.10;
-
-type RehabTier = "light" | "moderate" | "heavy";
-
-function estimateRehab(price: number, sqft: number): { amount: number; tier: RehabTier; months: number } {
-  const pricePerSqft = sqft > 0 ? price / sqft : 60;
-
-  if (pricePerSqft < 40) {
-    // Very cheap per sqft = likely needs heavy work
-    const amount = Math.round(sqft > 0 ? sqft * 30 : 40000);
-    return { amount: Math.min(Math.max(amount, 25000), 55000), tier: "heavy", months: 4 };
-  } else if (pricePerSqft < 65) {
-    // Moderate
-    const amount = Math.round(sqft > 0 ? sqft * 18 : 22000);
-    return { amount: Math.min(Math.max(amount, 12000), 35000), tier: "moderate", months: 3 };
-  } else {
-    // Higher price/sqft = probably in better shape
-    const amount = Math.round(sqft > 0 ? sqft * 8 : 10000);
-    return { amount: Math.min(Math.max(amount, 5000), 18000), tier: "light", months: 2 };
-  }
-}
-
-function calcAllIn(price: number, rehabCost: number, rehabMonths: number, monthlyRent: number) {
-  const closing = Math.round(price * CLOSING_COST_PCT);
-  const holding = Math.round(HOLDING_COST_MONTHLY * rehabMonths);
-  const allInCost = price + rehabCost + closing + holding + HQS_BUFFER;
-  const downPayment = Math.round(allInCost * DOWN_PAYMENT_PCT);
-  const loanAmount = allInCost - downPayment;
-  const monthlyRate = INTEREST_RATE / 12;
-  const nPayments = LOAN_TERM_YEARS * 12;
-  const mortgage = monthlyRate === 0
-    ? loanAmount / nPayments
-    : loanAmount * (monthlyRate * Math.pow(1 + monthlyRate, nPayments)) / (Math.pow(1 + monthlyRate, nPayments) - 1);
-  const taxes = allInCost * PROPERTY_TAX_RATE / 12;
-  const insurance = INSURANCE_MONTHLY;
-  const management = monthlyRent * MGMT_FEE_PCT;
-  const totalExpenses = mortgage + taxes + insurance + management;
-  const monthlyCashFlow = monthlyRent - totalExpenses;
-  const annualCashFlow = monthlyCashFlow * 12;
-  const dscr = mortgage > 0 ? monthlyRent / mortgage : 0;
-  const cocReturn = downPayment > 0 ? (annualCashFlow / downPayment) * 100 : 0;
-  const rentToPrice = allInCost > 0 ? (monthlyRent / allInCost) * 100 : 0;
-
-  return {
-    allInCost, closing, holding, hqsBuffer: HQS_BUFFER, downPayment,
-    mortgage: Math.round(mortgage), totalExpenses: Math.round(totalExpenses),
-    monthlyCashFlow: Math.round(monthlyCashFlow), annualCashFlow: Math.round(annualCashFlow),
-    dscr, cocReturn, rentToPrice,
-  };
-}
-
-const TIER_COLORS: Record<RehabTier, string> = {
-  light: "text-[#00ff88]",
-  moderate: "text-[#ffcc00]",
-  heavy: "text-[#ff4444]",
-};
-
-const TIER_BG: Record<RehabTier, string> = {
-  light: "bg-[rgba(0,255,136,0.08)] border-[rgba(0,255,136,0.2)]",
-  moderate: "bg-[rgba(255,204,0,0.08)] border-[rgba(255,204,0,0.2)]",
-  heavy: "bg-[rgba(255,68,68,0.08)] border-[rgba(255,68,68,0.2)]",
-};
-
-function DealRow({
-  deal,
-  rank,
-  expanded,
-  onToggle,
-  onAddToPortfolio,
-  onContactSeller,
-  showPortfolioBtn,
-  crimeGrade,
-  onExpand,
-  citySlug,
-  isSaved,
-  onToggleSave,
-}: {
-  deal: Deal;
-  rank: number;
-  expanded: boolean;
-  onToggle: () => void;
-  onAddToPortfolio: () => void;
-  onContactSeller: () => void;
-  showPortfolioBtn: boolean;
-  crimeGrade?: string;
-  onExpand?: () => void;
-  citySlug: string;
-  isSaved?: boolean;
-  onToggleSave?: () => void;
+function DealRow({ deal, rank, expanded, onToggle, onAddToPortfolio, onContactSeller, showPortfolioBtn, citySlug, isSaved, onToggleSave, isDemo }: {
+  deal: Deal; rank: number; expanded: boolean; onToggle: () => void; onAddToPortfolio: () => void;
+  onContactSeller: () => void; showPortfolioBtn: boolean; citySlug: string; isSaved?: boolean; onToggleSave?: () => void;
+  isDemo?: boolean;
 }) {
-  const rehab = estimateRehab(deal.price, deal.sqft);
-  const [rehabCost, setRehabCost] = useState(rehab.amount);
-  const [rehabMonths, setRehabMonths] = useState(rehab.months);
-  const [showAllIn, setShowAllIn] = useState(false);
-
-  useEffect(() => {
-    if (expanded && onExpand) onExpand();
-  }, [expanded, onExpand]);
-
-  // Recalc all-in numbers
-  const allIn = calcAllIn(deal.price, rehabCost, rehabMonths, deal.monthly_rent);
-
-  // Estimate PM savings: 10% of rent * 12 months minus $15/mo self-manage tools * 12
-  const pmSavings = Math.round(deal.monthly_rent * 0.10 * 12 - 15 * 12);
-
-  return (
-    <>
-      <tr
-        onClick={onToggle}
-        className="cursor-pointer hover:bg-[rgba(0,255,136,0.03)] transition-colors border-t border-[#222]"
-      >
-        <td className="px-4 py-3 font-[family-name:var(--font-mono)] text-[#555] text-xs">
-          {rank}
-        </td>
-        <td className="px-4 py-3 text-white whitespace-nowrap text-xs">
-          <span className="flex items-center gap-2">
-            {deal.address}
-            <ListingTypeBadge type={deal.listing_type || "standard"} />
-          </span>
-        </td>
-        <td className="px-4 py-3 font-[family-name:var(--font-mono)] text-xs whitespace-nowrap">
-          {formatCurrency(deal.price)}
-        </td>
-        <td className="px-4 py-3 font-[family-name:var(--font-mono)] text-xs">
-          {deal.beds}
-        </td>
-        <td className="px-4 py-3 font-[family-name:var(--font-mono)] text-xs text-[#00ff88] whitespace-nowrap">
-          {formatCurrency(deal.hud_rent)}/mo
-        </td>
-        <td
-          className={`px-4 py-3 font-[family-name:var(--font-mono)] text-xs font-bold ${dscrColor(deal.dscr)}`}
-        >
-          {deal.dscr.toFixed(2)}
-        </td>
-        <td
-          className={`px-4 py-3 font-[family-name:var(--font-mono)] text-xs font-bold whitespace-nowrap ${cashFlowColor(deal.monthly_cash_flow)}`}
-        >
-          {deal.monthly_cash_flow >= 0 ? "+" : ""}
-          {formatCurrency(deal.monthly_cash_flow)}/mo
-        </td>
-        <td
-          className={`px-4 py-3 font-[family-name:var(--font-mono)] text-xs font-bold ${deal.coc_return > 0 ? "text-[#00ff88]" : "text-[#ff4444]"}`}
-        >
-          {deal.coc_return.toFixed(1)}%
-        </td>
-        <td className="px-4 py-3">
-          <span
-            className={`inline-block px-2.5 py-1 rounded-md font-[family-name:var(--font-mono)] text-xs font-bold ${scoreBadgeColor(deal.score)}`}
-          >
-            {deal.score}
-          </span>
-        </td>
-      </tr>
-
-      {/* Expanded details */}
-      {expanded && (
-        <tr className="border-t border-[#1a1a1a]">
-          <td colSpan={9} className="px-6 py-4 bg-[#0d0d0d]">
-            {/* As-Is Numbers */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-              <div>
-                <span className="text-[#555] uppercase tracking-wider block mb-1">
-                  Mortgage
-                </span>
-                <span className="font-[family-name:var(--font-mono)] text-white">
-                  {formatCurrency(deal.mortgage)}/mo
-                </span>
-              </div>
-              <div>
-                <span className="text-[#555] uppercase tracking-wider block mb-1">
-                  Total Expenses
-                </span>
-                <span className="font-[family-name:var(--font-mono)] text-white">
-                  {formatCurrency(deal.expenses_total)}/mo
-                </span>
-              </div>
-              <div>
-                <span className="text-[#555] uppercase tracking-wider block mb-1">
-                  Down Payment
-                </span>
-                <span className="font-[family-name:var(--font-mono)] text-white">
-                  {formatCurrency(deal.down_payment)}
-                </span>
-              </div>
-              <div>
-                <span className="text-[#555] uppercase tracking-wider block mb-1">
-                  Annual Cash Flow
-                </span>
-                <span
-                  className={`font-[family-name:var(--font-mono)] ${cashFlowColor(deal.annual_cash_flow)}`}
-                >
-                  {formatCurrency(deal.annual_cash_flow)}/yr
-                </span>
-              </div>
-              <div>
-                <span className="text-[#555] uppercase tracking-wider block mb-1">
-                  Rent-to-Price
-                </span>
-                <span className="font-[family-name:var(--font-mono)] text-white">
-                  {deal.rent_to_price.toFixed(2)}%
-                </span>
-              </div>
-              <div>
-                <span className="text-[#555] uppercase tracking-wider block mb-1">
-                  Sqft
-                </span>
-                <span className="font-[family-name:var(--font-mono)] text-white">
-                  {deal.sqft > 0 ? deal.sqft.toLocaleString() : "—"}
-                </span>
-              </div>
-              <div>
-                <span className="text-[#555] uppercase tracking-wider block mb-1">
-                  Baths
-                </span>
-                <span className="font-[family-name:var(--font-mono)] text-white">
-                  {deal.baths}
-                </span>
-              </div>
-              <div>
-                <span className="text-[#555] uppercase tracking-wider block mb-1">
-                  Zillow
-                </span>
-                {deal.zillow_url ? (
-                  <a
-                    href={deal.zillow_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="text-[#00ff88] underline hover:no-underline"
-                  >
-                    View Listing &rarr;
-                  </a>
-                ) : (
-                  <span className="text-[#555]">—</span>
-                )}
-              </div>
-            </div>
-
-            {/* All-In Cost Calculator */}
-            <div className="mt-4 pt-3 border-t border-[#1a1a1a]">
-              <button
-                onClick={(e) => { e.stopPropagation(); setShowAllIn(!showAllIn); }}
-                className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#777] hover:text-white transition-colors"
-              >
-                <span className={`transition-transform ${showAllIn ? "rotate-90" : ""}`}>▶</span>
-                All-In Cost Calculator
-                <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${TIER_BG[rehab.tier]}`}>
-                  <span className={TIER_COLORS[rehab.tier]}>Est. {rehab.tier} rehab</span>
-                </span>
-              </button>
-
-              {showAllIn && (
-                <div className="mt-3 space-y-3" onClick={(e) => e.stopPropagation()}>
-                  {/* Cost Breakdown */}
-                  <div className={`p-3 rounded border ${TIER_BG[rehab.tier]}`}>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
-                      <div>
-                        <span className="text-[#555] uppercase tracking-wider block mb-1">Purchase</span>
-                        <span className="font-[family-name:var(--font-mono)] text-white">{formatCurrency(deal.price)}</span>
-                      </div>
-                      <div>
-                        <label className="text-[#555] uppercase tracking-wider block mb-1">
-                          Rehab Cost
-                        </label>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[#777] text-xs">$</span>
-                          <input
-                            type="number"
-                            value={rehabCost}
-                            onChange={(e) => setRehabCost(Math.max(0, parseInt(e.target.value) || 0))}
-                            className="w-24 bg-[#0a0a0a] border border-[#333] rounded px-2 py-1 font-[family-name:var(--font-mono)] text-white text-xs focus:border-[#00ff88] focus:outline-none"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-[#555] uppercase tracking-wider block mb-1">
-                          Rehab Months
-                        </label>
-                        <input
-                          type="number"
-                          value={rehabMonths}
-                          onChange={(e) => setRehabMonths(Math.max(0, Math.min(12, parseInt(e.target.value) || 0)))}
-                          className="w-16 bg-[#0a0a0a] border border-[#333] rounded px-2 py-1 font-[family-name:var(--font-mono)] text-white text-xs focus:border-[#00ff88] focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <span className="text-[#555] uppercase tracking-wider block mb-1">Closing (3%)</span>
-                        <span className="font-[family-name:var(--font-mono)] text-[#777]">{formatCurrency(allIn.closing)}</span>
-                      </div>
-                      <div>
-                        <span className="text-[#555] uppercase tracking-wider block mb-1">Holding ({rehabMonths}mo)</span>
-                        <span className="font-[family-name:var(--font-mono)] text-[#777]">{formatCurrency(allIn.holding)}</span>
-                      </div>
-                      <div>
-                        <span className="text-[#555] uppercase tracking-wider block mb-1">HQS Buffer</span>
-                        <span className="font-[family-name:var(--font-mono)] text-[#777]">{formatCurrency(allIn.hqsBuffer)}</span>
-                      </div>
-                    </div>
-                    <div className="mt-3 pt-3 border-t border-[#333] flex items-center justify-between">
-                      <span className="text-xs font-bold uppercase tracking-wider text-white">All-In Cost</span>
-                      <span className="font-[family-name:var(--font-mono)] text-lg font-bold text-white">{formatCurrency(allIn.allInCost)}</span>
-                    </div>
-                  </div>
-
-                  {/* Recalculated Metrics — side by side */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                    <div className="p-2 rounded bg-[#111] border border-[#222]">
-                      <span className="text-[#555] uppercase tracking-wider block mb-1">Down Payment (15%)</span>
-                      <div className="flex items-baseline gap-2">
-                        <span className="font-[family-name:var(--font-mono)] text-white">{formatCurrency(allIn.downPayment)}</span>
-                        <span className="text-[10px] text-[#555]">was {formatCurrency(deal.down_payment)}</span>
-                      </div>
-                    </div>
-                    <div className="p-2 rounded bg-[#111] border border-[#222]">
-                      <span className="text-[#555] uppercase tracking-wider block mb-1">DSCR</span>
-                      <div className="flex items-baseline gap-2">
-                        <span className={`font-[family-name:var(--font-mono)] font-bold ${dscrColor(allIn.dscr)}`}>{allIn.dscr.toFixed(2)}</span>
-                        <span className="text-[10px] text-[#555]">was {deal.dscr.toFixed(2)}</span>
-                      </div>
-                    </div>
-                    <div className="p-2 rounded bg-[#111] border border-[#222]">
-                      <span className="text-[#555] uppercase tracking-wider block mb-1">Monthly Cash Flow</span>
-                      <div className="flex items-baseline gap-2">
-                        <span className={`font-[family-name:var(--font-mono)] font-bold ${cashFlowColor(allIn.monthlyCashFlow)}`}>
-                          {allIn.monthlyCashFlow >= 0 ? "+" : ""}{formatCurrency(allIn.monthlyCashFlow)}
-                        </span>
-                        <span className="text-[10px] text-[#555]">was {deal.monthly_cash_flow >= 0 ? "+" : ""}{formatCurrency(deal.monthly_cash_flow)}</span>
-                      </div>
-                    </div>
-                    <div className="p-2 rounded bg-[#111] border border-[#222]">
-                      <span className="text-[#555] uppercase tracking-wider block mb-1">Cash-on-Cash</span>
-                      <div className="flex items-baseline gap-2">
-                        <span className={`font-[family-name:var(--font-mono)] font-bold ${allIn.cocReturn > 0 ? "text-[#00ff88]" : "text-[#ff4444]"}`}>
-                          {allIn.cocReturn.toFixed(1)}%
-                        </span>
-                        <span className="text-[10px] text-[#555]">was {deal.coc_return.toFixed(1)}%</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Quick rehab presets */}
-                  <div className="flex gap-2 text-[10px]">
-                    <span className="text-[#555] uppercase tracking-wider self-center">Quick set:</span>
-                    {([
-                      { label: "Light ($10K)", cost: 10000, months: 2 },
-                      { label: "Moderate ($25K)", cost: 25000, months: 3 },
-                      { label: "Heavy ($40K)", cost: 40000, months: 4 },
-                      { label: "None ($0)", cost: 0, months: 0 },
-                    ] as const).map((preset) => (
-                      <button
-                        key={preset.label}
-                        onClick={() => { setRehabCost(preset.cost); setRehabMonths(preset.months); }}
-                        className={`px-2 py-1 rounded border transition-colors ${
-                          rehabCost === preset.cost
-                            ? "border-[#00ff88] text-[#00ff88] bg-[rgba(0,255,136,0.08)]"
-                            : "border-[#333] text-[#777] hover:border-[#555] hover:text-white"
-                        }`}
-                      >
-                        {preset.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Rehab Grants & Assistance */}
-            <GrantsSection citySlug={citySlug} />
-
-            {/* Neighborhood & Section 8 stats */}
-            <div className="mt-4 pt-3 border-t border-[#1a1a1a] flex flex-wrap gap-4 items-center text-xs">
-              {crimeGrade && (
-                <div className="flex items-center gap-2">
-                  <Shield size={12} className="text-[#555]" />
-                  <span className="text-[#555] uppercase tracking-wider">Crime Grade:</span>
-                  <CrimeGradeBadge grade={crimeGrade} />
-                </div>
-              )}
-              <div className="flex items-center gap-2">
-                <span className="text-[#555]">Avg S8 tenant stay:</span>
-                <span className="font-[family-name:var(--font-mono)] text-white">7 years</span>
-              </div>
-              {pmSavings > 0 && (
-                <div className="flex items-center gap-2">
-                  <span className="text-[#555]">Self-manage savings:</span>
-                  <span className="font-[family-name:var(--font-mono)] text-[#00ff88]">
-                    ~{formatCurrency(pmSavings)}/yr
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {/* Action buttons in expanded row */}
-            <div className="mt-4 pt-3 border-t border-[#1a1a1a] flex flex-wrap gap-2">
-              {onToggleSave && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggleSave();
-                  }}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase border rounded-md transition-colors ${
-                    isSaved
-                      ? "text-[#ffcc00] border-[#ffcc00] bg-[rgba(255,204,0,0.08)]"
-                      : "text-[#777] border-[#222] hover:border-[#ffcc00] hover:text-[#ffcc00]"
-                  }`}
-                >
-                  {isSaved ? <BookmarkCheck size={10} /> : <Bookmark size={10} />}
-                  {isSaved ? "Saved" : "Save Deal"}
-                </button>
-              )}
-              {showPortfolioBtn && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onAddToPortfolio();
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase text-[#777] border border-[#222] rounded-md hover:border-[#00ff88] hover:text-[#00ff88] transition-colors"
-                >
-                  <Building2 size={10} />
-                  Add to Portfolio
-                </button>
-              )}
-              {showPortfolioBtn && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onContactSeller();
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase border rounded-md transition-colors text-[#777] border-[#222] hover:border-[#00ff88] hover:text-[#00ff88]"
-                >
-                  <Mail size={10} />
-                  Contact Seller
-                </button>
-              )}
-              {deal.zillow_url && (
-                <a
-                  href={deal.zillow_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase text-[#777] border border-[#222] rounded-md hover:border-[#00ff88] hover:text-[#00ff88] transition-colors"
-                >
-                  View on Zillow
-                </a>
-              )}
-            </div>
-          </td>
-        </tr>
-      )}
-    </>
-  );
+  return <>
+    <tr className="border-t border-[#222] text-xs">
+      <td className="px-4 py-3 text-[#888]">{rank}</td>
+      <td className="px-4 py-3"><button className="text-left text-white underline decoration-[#444] underline-offset-4" onClick={onToggle} aria-expanded={expanded}>{deal.address}</button><div className="mt-1"><ListingTypeBadge type={deal.listing_type || "standard"} /></div></td>
+      <td className="px-4 py-3">{formatCurrency(deal.price)}</td><td className="px-4 py-3">{deal.beds}</td>
+      <td className="px-4 py-3">{formatCurrency(deal.monthly_rent)}/mo</td><td className="px-4 py-3">{deal.dscr.toFixed(2)}</td>
+      <td className={`px-4 py-3 ${cashFlowColor(deal.monthly_cash_flow)}`}>{formatCurrency(deal.monthly_cash_flow)}/mo</td>
+      <td className="px-4 py-3">{deal.coc_return.toFixed(2)}%</td><td className="px-4 py-3 text-[#aaa]">{deal.score}</td>
+    </tr>
+    {expanded && <tr><td colSpan={9} className="p-5 bg-[#141414]">
+      <p className="text-sm text-[#bbb] mb-3">Initial cash estimate: {formatCurrency(deal.initial_cash ?? deal.down_payment)}. Review financing, repairs, vacancy, and reserves in the worksheet.</p>
+      <div className="flex flex-wrap gap-4 items-center text-sm">
+        <Link href={analysisUrl(deal, citySlug, isDemo)} className="rounded-lg bg-[#00ff88] px-4 py-2 font-semibold text-black">Analyze property →</Link>
+        <button onClick={onToggleSave} className="text-[#ccc]">{isSaved ? "Remove browser bookmark" : "Bookmark in this browser"}</button>
+        {showPortfolioBtn && <button onClick={onAddToPortfolio} className="text-[#aaa]">Add to portfolio</button>}
+        <button onClick={onContactSeller} className="text-[#aaa]">Outreach draft</button>
+      </div>
+      <p className="text-xs text-[#aaa] mt-3">Cash-on-cash uses initial cash including reserves. Rent and provider scores are unverified. Bookmarks retain the default case; save edited scenarios from the worksheet.</p>
+      <GrantsSection citySlug={citySlug} />
+    </td></tr>}
+  </>;
 }

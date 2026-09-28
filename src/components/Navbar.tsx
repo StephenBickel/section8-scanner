@@ -25,6 +25,7 @@ import { useSavedDealsStore } from "@/stores/saved-deals";
 
 const NAV_LINKS = [
   { href: "/", label: "Scanner", icon: Search },
+  { href: "/analyze", label: "Analyze", icon: FileText },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/portfolio", label: "Portfolio", icon: Building2 },
   { href: "/tenants", label: "Tenants", icon: Users },
@@ -43,42 +44,42 @@ export default function Navbar() {
 
   useEffect(() => {
     const supabase = createClient();
+    let active = true;
+    let generation = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
 
     async function loadSession() {
-      setLoading(true);
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      setUser(currentUser);
-
-      if (currentUser) {
-        const { data: profileData } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", currentUser.id)
-          .single();
-        setProfile(profileData);
+      const current = ++generation;
+      try {
+        const { data: { user: currentUser } } = await supabase.auth.getUser();
+        if (!active || current !== generation) return;
+        setUser(currentUser);
+        if (!currentUser) { setProfile(null); return; }
+        const { data } = await supabase.from("profiles").select("*").eq("id", currentUser.id).single();
+        if (active && current === generation) setProfile(data);
+      } catch {
+        if (active && current === generation) { setUser(null); setProfile(null); }
+      } finally {
+        if (active && current === generation) setLoading(false);
       }
-      setLoading(false);
     }
-
-    loadSession();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        setUser(session?.user ?? null);
-        if (session?.user) {
-          const { data: profileData } = await supabase
-            .from("profiles")
-            .select("*")
-            .eq("id", session.user.id)
-            .single();
-          setProfile(profileData);
-        } else {
-          setProfile(null);
-        }
+    void loadSession();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (timer) clearTimeout(timer);
+      if (!session) {
+        generation += 1;
+        setUser(null); setProfile(null); setLoading(false);
+        return;
       }
-    );
-
-    return () => subscription.unsubscribe();
+      generation += 1;
+      if (useAuthStore.getState().user?.id !== session.user.id) {
+        setUser(null); setProfile(null); setLoading(true);
+      }
+      // Supabase invokes this callback under an auth lock. Defer API work until
+      // the callback returns; awaiting it here can deadlock on a signed-in reload.
+      timer = setTimeout(() => { void loadSession(); }, 0);
+    });
+    return () => { active = false; generation += 1; if (timer) clearTimeout(timer); subscription.unsubscribe(); };
   }, [setUser, setProfile, setLoading]);
 
   const handleLogout = async () => {

@@ -1,4 +1,6 @@
 interface ExportDeal {
+  source_kind?: string;
+  initial_cash?: number;
   address: string;
   price: number;
   beds: number;
@@ -34,7 +36,9 @@ export function serializeDealsToCSV(deals: ExportDeal[]): string {
     "Beds",
     "Baths",
     "Sqft",
-    "HUD Rent",
+    "Rent assumption",
+    "Source status",
+    "Initial cash including reserves",
     "DSCR",
     "Monthly Cash Flow",
     "Annual Cash Flow",
@@ -56,7 +60,9 @@ export function serializeDealsToCSV(deals: ExportDeal[]): string {
     d.beds,
     d.baths,
     d.sqft,
-    d.hud_rent,
+    d.monthly_rent,
+    d.source_kind ?? "Unverified legacy record",
+    d.initial_cash ?? "Unknown",
     d.dscr.toFixed(2),
     d.monthly_cash_flow.toFixed(0),
     d.annual_cash_flow.toFixed(0),

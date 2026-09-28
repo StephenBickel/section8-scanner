@@ -2,6 +2,8 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 interface SavedDeal {
+  initial_cash?: number;
+  source_kind?: "demo" | "scanner";
   address: string;
   price: number;
   beds: number;
